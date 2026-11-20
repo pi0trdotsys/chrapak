@@ -10,33 +10,73 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as NocRouteImport } from './routes/noc'
+import { Route as TrendyRouteImport } from './routes/trendy'
+import { Route as UstawieniaRouteImport } from './routes/ustawienia'
+import { Route as ZdarzeniaRouteImport } from './routes/zdarzenia'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NocRoute = NocRouteImport.update({
+  id: '/noc',
+  path: '/noc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrendyRoute = TrendyRouteImport.update({
+  id: '/trendy',
+  path: '/trendy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UstawieniaRoute = UstawieniaRouteImport.update({
+  id: '/ustawienia',
+  path: '/ustawienia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ZdarzeniaRoute = ZdarzeniaRouteImport.update({
+  id: '/zdarzenia',
+  path: '/zdarzenia',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/noc': typeof NocRoute
+  '/trendy': typeof TrendyRoute
+  '/ustawienia': typeof UstawieniaRoute
+  '/zdarzenia': typeof ZdarzeniaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/noc': typeof NocRoute
+  '/trendy': typeof TrendyRoute
+  '/ustawienia': typeof UstawieniaRoute
+  '/zdarzenia': typeof ZdarzeniaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/noc': typeof NocRoute
+  '/trendy': typeof TrendyRoute
+  '/ustawienia': typeof UstawieniaRoute
+  '/zdarzenia': typeof ZdarzeniaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/noc' | '/trendy' | '/ustawienia' | '/zdarzenia'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/noc' | '/trendy' | '/ustawienia' | '/zdarzenia'
+  id: '__root__' | '/' | '/noc' | '/trendy' | '/ustawienia' | '/zdarzenia'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  NocRoute: typeof NocRoute
+  TrendyRoute: typeof TrendyRoute
+  UstawieniaRoute: typeof UstawieniaRoute
+  ZdarzeniaRoute: typeof ZdarzeniaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +88,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/noc': {
+      id: '/noc'
+      path: '/noc'
+      fullPath: '/noc'
+      preLoaderRoute: typeof NocRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trendy': {
+      id: '/trendy'
+      path: '/trendy'
+      fullPath: '/trendy'
+      preLoaderRoute: typeof TrendyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ustawienia': {
+      id: '/ustawienia'
+      path: '/ustawienia'
+      fullPath: '/ustawienia'
+      preLoaderRoute: typeof UstawieniaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/zdarzenia': {
+      id: '/zdarzenia'
+      path: '/zdarzenia'
+      fullPath: '/zdarzenia'
+      preLoaderRoute: typeof ZdarzeniaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  NocRoute: NocRoute,
+  TrendyRoute: TrendyRoute,
+  UstawieniaRoute: UstawieniaRoute,
+  ZdarzeniaRoute: ZdarzeniaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

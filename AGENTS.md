@@ -28,3 +28,8 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+<!-- AGENT-MEMORY:BEGIN -->
+- Keep prototype data in one typed `src/data/mock.ts` with the specified domain shapes, so the data model remains portable.
+- Use one component file per screen and shared chart/player components; keep listening and clip edits in a root React provider so navigation preserves prototype state without persistence or backend access.
+<!-- AGENT-MEMORY:END -->
