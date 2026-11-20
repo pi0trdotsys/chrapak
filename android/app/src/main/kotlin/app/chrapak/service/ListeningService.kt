@@ -146,7 +146,7 @@ class ListeningService : Service() {
         val record = createAudioRecord(sampleRate)
         try {
             record.startRecording()
-            val chunk = ShortArray(sampleRate / 2) // 0.5 s per read: few wake-ups, low CPU
+            val chunk = ShortArray(sampleRate * READ_CHUNK_MS / 1000) // one read per chunk: fewer wake-ups, lower CPU
             var lastUiUpdate = 0L
             while (!stopRequested && isActive) {
                 val read = record.read(chunk, 0, chunk.size)
@@ -260,6 +260,7 @@ class ListeningService : Service() {
         private const val CHANNEL_ID = "listening"
         private const val NOTIFICATION_ID = 1
         private const val UI_UPDATE_MS = 1_000L
+        private const val READ_CHUNK_MS = 500
         private const val WAKE_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000L
 
         fun start(context: Context) {
