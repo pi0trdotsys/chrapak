@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chrapak</string>
+    <string name="notification_channel_name">Nasłuch chrapania</string>
+    <string name="notification_title">Nasłuch aktywny</string>
+    <string name="notification_stop">Zatrzymaj</string>
+</resources>
