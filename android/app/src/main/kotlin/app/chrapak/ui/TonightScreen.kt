@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import app.chrapak.schedule.AutoListenPrefs
+import app.chrapak.schedule.ScheduleMath
 import app.chrapak.service.ListeningService
 import app.chrapak.service.ListeningState
 import app.chrapak.ui.theme.Palette
@@ -54,6 +56,12 @@ fun TonightScreen() {
                 color = Palette.mutedForeground,
             )
             status.levelDb?.let { Text("Poziom: ${it.roundToInt()} dBFS", color = Palette.mutedForeground) }
+        }
+        if (status.armed && !status.listening) {
+            Text(
+                if (AutoListenPrefs.scheduleOn(context)) "Czuwam. Nasłuch włączy się o ${ScheduleMath.format(AutoListenPrefs.startMin(context))}." else "Czuwam. Włącz nasłuch ręcznie lub z kafelka.",
+                color = Palette.mutedForeground,
+            )
         }
         status.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Button(

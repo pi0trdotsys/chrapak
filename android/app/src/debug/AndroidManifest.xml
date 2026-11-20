@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug builds only: lets adb change the listening window without tapping through the UI. -->
+        <receiver
+            android:name="app.chrapak.debug.DebugReceiver"
+            android:exported="true" />
+    </application>
+</manifest>

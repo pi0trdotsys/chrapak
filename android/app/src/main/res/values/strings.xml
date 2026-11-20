@@ -4,4 +4,11 @@
     <string name="notification_channel_name">Nasłuch chrapania</string>
     <string name="notification_title">Nasłuch aktywny</string>
     <string name="notification_stop">Zatrzymaj</string>
+    <string name="notification_standby_title">Czuwam</string>
+    <string name="notification_standby_text">Nasłuch włączy się o %1$s</string>
+    <string name="notification_standby_no_schedule">Nasłuch włączysz ręcznie lub z kafelka</string>
+    <string name="notification_standby_off">Wyłącz czuwanie</string>
+    <string name="notification_not_started_title">Nasłuch nie wystartował</string>
+    <string name="notification_not_started_text">Android nie pozwolił włączyć mikrofonu w tle. Otwórz Chrapak, aby wznowić czuwanie.</string>
+    <string name="tile_label">Chrapak</string>
 </resources>

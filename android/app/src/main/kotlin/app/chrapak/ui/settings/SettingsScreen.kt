@@ -56,6 +56,9 @@ fun SettingsScreen(health: HealthConnectSource, repo: NightRepository) {
         Text("PO TWOJEMU", style = MaterialTheme.typography.labelSmall, color = Palette.mutedForeground)
         Text("Ustawienia", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
+        AutoListenCard()
+        BatteryCard()
+
         Card(colors = CardDefaults.cardColors(containerColor = Palette.card)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Źródła danych", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -94,6 +97,11 @@ fun SettingsScreen(health: HealthConnectSource, repo: NightRepository) {
                                 Text(o.label, fontWeight = FontWeight.Bold)
                                 Text(
                                     "sesje snu: ${o.sleepSessions} (fazy: ${o.stageSegments}) · tętno: ${o.heartRateSamples} · SpO₂: ${o.spo2Samples}",
+                                    color = Palette.mutedForeground,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    "opóźnienie zapisu (mediana): sen ${o.sleepLagMin ?: "–"} min · tętno ${o.heartRateLagMin ?: "–"} min · SpO₂ ${o.spo2LagMin ?: "–"} min · ostatni zapis ${o.lastWriteAgoMin ?: "–"} min temu",
                                     color = Palette.mutedForeground,
                                     style = MaterialTheme.typography.bodySmall,
                                 )

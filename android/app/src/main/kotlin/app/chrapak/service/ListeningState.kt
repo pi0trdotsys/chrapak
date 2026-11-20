@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.update
 
 data class ListeningStatus(
     val listening: Boolean = false,
+    /** Standby is on: the service is waiting for the daily window and will start listening by itself. */
+    val armed: Boolean = false,
     val sinceMs: Long? = null,
     val eventCount: Int = 0,
     /** Latest band level in dBFS, for a calm "I can hear you" indicator. Null when idle. */

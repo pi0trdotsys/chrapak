@@ -10,9 +10,19 @@ import androidx.compose.ui.Modifier
 import app.chrapak.data.ChrapakDatabase
 import app.chrapak.data.NightRepository
 import app.chrapak.health.HealthConnectSource
+import app.chrapak.schedule.AutoListenPrefs
+import app.chrapak.service.ListeningService
+import app.chrapak.service.ListeningState
 import app.chrapak.ui.theme.ChrapakColors
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        // The standby service dies with the process (restart, update, cleaner apps). Opening the app is the
+        // moment Android allows it to come back, so restore it whenever standby is still switched on.
+        if (AutoListenPrefs.armed(this) && !ListeningState.status.value.armed) ListeningService.arm(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val health = HealthConnectSource(applicationContext)
