@@ -16,6 +16,7 @@ class OrphanedNightsTest {
             rows.replaceAll { if (it.id == id) it.copy(sleepEndMs = endMs) else it }
         }
         override suspend fun open() = rows.filter { it.sleepEndMs == null }
+        override suspend fun all() = rows.sortedByDescending { it.sleepStartMs }
     }
 
     private class FakeEvents(val rows: List<SnoreEventEntity>) : SnoreEventDao {
@@ -23,6 +24,10 @@ class OrphanedNightsTest {
         override suspend fun count(nightId: String) = rows.count { it.nightId == nightId }
         override suspend fun lastEventEndMs(nightId: String) =
             rows.filter { it.nightId == nightId }.maxOfOrNull { it.startMs + it.durationMs }
+        override suspend fun forNight(nightId: String) = rows.filter { it.nightId == nightId }
+        override suspend fun setStarred(id: String, starred: Boolean) = error("not used")
+        override suspend fun setFalsePositive(id: String, falsePositive: Boolean) = error("not used")
+        override suspend fun delete(id: String) = error("not used")
     }
 
     private fun event(night: String, start: Long, duration: Long) =
