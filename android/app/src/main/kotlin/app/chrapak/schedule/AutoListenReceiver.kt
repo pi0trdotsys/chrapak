@@ -37,6 +37,14 @@ class AutoListenReceiver : BroadcastReceiver() {
                     }
                 }
             }
+            ListeningService.ACTION_NAP_CHECK -> {
+                // Only a running standby service can start the microphone; with none, there is nothing to ask.
+                if (ListeningState.status.value.armed) {
+                    runCatching {
+                        context.startService(Intent(context, ListeningService::class.java).setAction(ListeningService.ACTION_NAP_CHECK))
+                    }
+                }
+            }
             ListeningService.ACTION_WINDOW_END -> {
                 AutoListenScheduler.reschedule(context)
                 // Only worth delivering to a service that is already running; ignore the refusal otherwise.

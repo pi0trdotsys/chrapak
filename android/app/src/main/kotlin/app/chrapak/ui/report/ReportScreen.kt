@@ -50,6 +50,7 @@ import app.chrapak.ui.events.ClipPlayer
 import app.chrapak.ui.events.EventSheet
 import app.chrapak.ui.stageLabel
 import app.chrapak.service.ListeningState
+import app.chrapak.ui.theme.LocalPalette
 import app.chrapak.ui.theme.Palette
 import app.chrapak.ui.timeLabel
 import kotlinx.coroutines.launch
@@ -66,6 +67,7 @@ fun ReportScreen(
     onNightChange: (String) -> Unit,
     onOpenEvents: (events: List<SnoreEventEntity>, health: NightHealth) -> Unit,
     onChanged: () -> Unit,
+    onAnalyze: (SnoreEventEntity) -> Unit,
 ) {
     val nights by produceState<List<NightEntity>?>(null, version) { value = repo.nights() }
     val all = nights
@@ -106,7 +108,7 @@ fun ReportScreen(
         if (current == null) {
             Text("Wczytywanie nocy…", color = Palette.mutedForeground)
         } else {
-            NightContent(repo, night, current, player, onOpenEvents, onChanged)
+            NightContent(repo, night, current, player, onOpenEvents, onChanged, onAnalyze)
         }
         Spacer(Modifier.height(16.dp))
     }
@@ -147,6 +149,7 @@ private fun NightContent(
     player: ClipPlayer,
     onOpenEvents: (List<SnoreEventEntity>, NightHealth) -> Unit,
     onChanged: () -> Unit,
+    onAnalyze: (SnoreEventEntity) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val stats = NightReport.stats(night, data.events)
@@ -184,6 +187,10 @@ private fun NightContent(
             onStar = { scope.launch { repo.setStarred(event, !event.starred); selected = null; onChanged() } },
             onFalsePositive = { scope.launch { repo.setFalsePositive(event, !event.falsePositive); selected = null; onChanged() } },
             onDelete = { scope.launch { player.stop(); repo.delete(event); selected = null; onChanged() } },
+            onAnalyze = {
+                selected = null
+                onAnalyze(event)
+            },
             onDismiss = { selected = null },
         )
     }
@@ -191,14 +198,15 @@ private fun NightContent(
 
 @Composable
 private fun ScoreSection(stats: NightStats) {
+    val colors = LocalPalette.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.size(120.dp)) {
                 val stroke = 10.dp.toPx()
                 val inset = stroke / 2
                 val arcSize = Size(size.width - stroke, size.height - stroke)
-                drawArc(Palette.border, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
-                drawArc(Palette.primary, -90f, 360f * stats.score / 100f, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                drawArc(colors.border, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
+                drawArc(colors.primary, -90f, 360f * stats.score / 100f, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("${stats.score}", style = MaterialTheme.typography.headlineLarge)

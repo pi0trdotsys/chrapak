@@ -49,6 +49,8 @@ fun AutoListenCard() {
     var startMin by remember { mutableIntStateOf(AutoListenPrefs.startMin(context)) }
     var endMin by remember { mutableIntStateOf(AutoListenPrefs.endMin(context)) }
     var scheduleOn by remember { mutableStateOf(AutoListenPrefs.scheduleOn(context)) }
+    var napDetect by remember { mutableStateOf(AutoListenPrefs.napDetect(context)) }
+    var summaryOn by remember { mutableStateOf(AutoListenPrefs.summaryOn(context)) }
     var editingStart by remember { mutableStateOf<Boolean?>(null) }
 
     val permissions = buildList {
@@ -102,6 +104,34 @@ fun AutoListenCard() {
                     OutlinedButton(onClick = { editingStart = true }, modifier = Modifier.weight(1f)) { Text("Od ${ScheduleMath.format(startMin)}") }
                     OutlinedButton(onClick = { editingStart = false }, modifier = Modifier.weight(1f)) { Text("Do ${ScheduleMath.format(endMin)}") }
                 }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Wykrywaj drzemki w ciągu dnia", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Switch(
+                    checked = napDetect,
+                    onCheckedChange = {
+                        napDetect = it
+                        AutoListenPrefs.setNapDetect(context, it)
+                        applyChange()
+                    },
+                )
+            }
+            if (napDetect) {
+                Text(
+                    "Gdy jest 11:00–20:00, ekran jest wygaszony od 15 minut, a telefon leży nieruchomo, zakładam drzemkę i włączam nasłuch. Kończy się po włączeniu ekranu albo po 3 godzinach. To domysł: telefon leżący na biurku wygląda tak samo, dlatego fałszywy start jest tani i kończy się sam.",
+                    color = Palette.mutedForeground,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Podsumowanie po nocy w powiadomieniu", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Switch(
+                    checked = summaryOn,
+                    onCheckedChange = {
+                        summaryOn = it
+                        AutoListenPrefs.setSummaryOn(context, it)
+                    },
+                )
             }
             Text(
                 "Drzemki: dodaj kafelek „Chrapak” do Szybkich ustawień. Jedno dotknięcie włącza nasłuch na 3 godziny albo do ponownego dotknięcia.",

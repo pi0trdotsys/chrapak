@@ -10,6 +10,12 @@ interface SnoreClassifier {
     val windowSamples: Int
 
     fun score(window: ShortArray): Float
+
+    /**
+     * Probability (0..1) that the window contains sounds of someone awake and active: speech,
+     * television, music, typing, footsteps. Used to call off a nap that was only a guess.
+     */
+    fun awakeScore(window: ShortArray): Float = 0f
 }
 
 /** Confidence reported for events accepted by the gate alone, when no classifier is installed. */
@@ -122,6 +128,9 @@ class DetectionPipeline(
             }
         }
     }
+
+    /** The latest [samples] of audio for a one-off analysis, or null before that much has been heard. */
+    fun latestWindow(samples: Int): ShortArray? = if (ring.size >= samples) ring.latest(samples) else null
 
     /** Ends listening: emits the episode in progress, if it qualifies. */
     fun finish() {

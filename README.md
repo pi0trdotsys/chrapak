@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon/icon.svg" alt="Ikona Chrapak" width="120"></p>
+
 # Chrapak
 
 Aplikacja, która **nagrywa i analizuje Twoje chrapanie podczas snu** oraz zestawia je z danymi z pierścienia i opaski: fazami snu, saturacją (SpO₂) i tętnem. Nagrania zostają na telefonie.
@@ -7,7 +9,7 @@ Projekt ma dwie części:
 | Część | Gdzie | Stan |
 |---|---|---|
 | **Makieta interaktywna** (React, dane testowe) | `src/` | gotowa, z pięcioma motywami wyglądu |
-| **Aplikacja na Androida** (Kotlin, Jetpack Compose) | `android/` | działa na telefonie: nasłuch z detekcją, raport z Health Connect, nagrania. Czeka na test pełnej nocy |
+| **Aplikacja na Androida** (Kotlin, Jetpack Compose) | `android/` | działa na telefonie: automatyczny nasłuch (noc i drzemki), detekcja dwustopniowa, raport z Health Connect, analiza nagrań, motywy z Material You. Czeka na test pełnej nocy |
 
 Docelowy sprzęt: telefon z Androidem (mikrofon), **RingConn Gen 2 Air** i **Xiaomi Smart Band 10** jako źródła danych o śnie przez Health Connect.
 

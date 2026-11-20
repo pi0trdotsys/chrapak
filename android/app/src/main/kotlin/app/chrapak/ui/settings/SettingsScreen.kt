@@ -58,6 +58,7 @@ fun SettingsScreen(health: HealthConnectSource, repo: NightRepository) {
 
         AutoListenCard()
         BatteryCard()
+        ThemeCard()
 
         Card(colors = CardDefaults.cardColors(containerColor = Palette.card)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

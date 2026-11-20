@@ -56,6 +56,7 @@ fun EventsScreen(
     player: ClipPlayer,
     onBack: () -> Unit,
     onChanged: () -> Unit,
+    onAnalyze: (SnoreEventEntity) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var filter by rememberSaveable { mutableStateOf(Filter.ALL) }
@@ -87,6 +88,10 @@ fun EventsScreen(
                         Text(eventFacts(event, health).joinToString(" · "), color = Palette.mutedForeground, style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             PlayButton(event, file, player)
+                            TextButton(onClick = {
+                                player.stop()
+                                onAnalyze(event)
+                            }, enabled = file != null) { Text("Analiza") }
                             TextButton(onClick = { scope.launch { repo.setStarred(event, !event.starred); onChanged() } }) {
                                 Text(if (event.starred) "Odepnij" else "Zachowaj")
                             }

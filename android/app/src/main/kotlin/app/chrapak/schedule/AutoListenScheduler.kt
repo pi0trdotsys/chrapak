@@ -16,6 +16,7 @@ object AutoListenScheduler {
     private const val REQ_START = 11
     private const val REQ_END = 12
     private const val REQ_WATCHDOG = 13
+    private const val REQ_NAP = 14
 
     /** How often the standby service double-checks that a window which is already open has started. */
     private const val WATCHDOG_MS = 5 * 60_000L
@@ -38,6 +39,15 @@ object AutoListenScheduler {
         // Inexact on purpose: this is only a safety net for alarms the phone's power manager moved or dropped.
         context.getSystemService(AlarmManager::class.java)
             .setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, now + WATCHDOG_MS, pending(context, ListeningService.ACTION_WATCHDOG, REQ_WATCHDOG))
+    }
+
+    /** One alarm for the moment the quiet period would be over; replaced whenever the phone moves. */
+    fun scheduleNapCheck(context: Context, atMs: Long) {
+        set(context, atMs, ListeningService.ACTION_NAP_CHECK, REQ_NAP)
+    }
+
+    fun cancelNapCheck(context: Context) {
+        context.getSystemService(AlarmManager::class.java).cancel(pending(context, ListeningService.ACTION_NAP_CHECK, REQ_NAP))
     }
 
     fun cancel(context: Context) {

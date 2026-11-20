@@ -21,7 +21,7 @@ object AutoListenNotifier {
         manager.notify(
             NOTIFICATION_ID,
             Notification.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setSmallIcon(R.drawable.ic_stat_chrapak)
                 .setContentTitle(context.getString(R.string.notification_not_started_title))
                 .setContentText(context.getString(R.string.notification_not_started_text))
                 .setContentIntent(open)

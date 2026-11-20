@@ -14,6 +14,16 @@ import app.chrapak.schedule.AutoListenScheduler
  */
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == "app.chrapak.debug.SET_THEME") {
+            runCatching { app.chrapak.ui.theme.ThemeChoice.valueOf(intent.getStringExtra("theme").orEmpty()) }
+                .onSuccess { app.chrapak.ui.theme.ThemeState.set(context, it) }
+            return
+        }
+        if (intent.action == "app.chrapak.debug.SET_NAP") {
+            AutoListenPrefs.setNapQuietMin(context, intent.getIntExtra("quiet", 15))
+            Log.i("ChrapakDebug", "nap quiet time set to ${AutoListenPrefs.napQuietMin(context)} min (re-arm to apply)")
+            return
+        }
         if (intent.action != "app.chrapak.debug.SET_WINDOW") return
         fun minutes(text: String?): Int? = text?.split(":")?.takeIf { it.size == 2 }?.let { it[0].toInt() * 60 + it[1].toInt() }
         val start = minutes(intent.getStringExtra("start")) ?: return

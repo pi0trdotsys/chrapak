@@ -63,6 +63,7 @@ fun EventSheet(
     onStar: () -> Unit,
     onFalsePositive: () -> Unit,
     onDelete: () -> Unit,
+    onAnalyze: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -79,6 +80,10 @@ fun EventSheet(
             eventFacts(event, health).forEach { Text(it, color = Palette.mutedForeground) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 PlayButton(event, file, player)
+                OutlinedButton(onClick = {
+                    player.stop()
+                    onAnalyze()
+                }, enabled = file != null) { Text("Analiza") }
             }
             if (player.playingId == event.id) {
                 LinearProgressIndicator(progress = { player.progress }, modifier = Modifier.fillMaxWidth(), color = Palette.primary, trackColor = Palette.border)
