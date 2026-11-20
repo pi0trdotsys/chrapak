@@ -24,6 +24,10 @@
         android:gravity="center"
         android:maxLines="1"
         android:textColor="@color/widget_text"
+        android:autoSizeMaxTextSize="12sp"
+        android:autoSizeMinTextSize="8sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
         android:textSize="12sp"
         android:textStyle="bold" />
 </LinearLayout>
