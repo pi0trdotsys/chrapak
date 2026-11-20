@@ -79,6 +79,10 @@ private fun TonightScreen() {
         )
         if (status.listening) {
             Text("Wykryto zdarzeń: ${status.eventCount}", color = MaterialTheme.colorScheme.onBackground)
+            Text(
+                if (status.classifierActive) "Klasyfikator: aktywny" else "Klasyfikator: brak modelu (sama bramka)",
+                color = MaterialTheme.colorScheme.onBackground,
+            )
             status.levelDb?.let { Text("Poziom: ${it.roundToInt()} dBFS", color = MaterialTheme.colorScheme.onBackground) }
         }
         status.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

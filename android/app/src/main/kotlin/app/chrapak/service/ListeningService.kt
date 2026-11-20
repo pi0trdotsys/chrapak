@@ -30,6 +30,7 @@ import app.chrapak.data.SnoreEventEntity
 import app.chrapak.detection.DetectedEvent
 import app.chrapak.detection.DetectionConfig
 import app.chrapak.detection.DetectionPipeline
+import app.chrapak.detection.YamnetClassifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -138,9 +139,11 @@ class ListeningService : Service() {
             }
         }
 
-        val pipeline = DetectionPipeline(config, classifier = null, startEpochMs = startMs) { events.trySend(it) }
-        val record = createAudioRecord(sampleRate)
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        val classifier = YamnetClassifier.load(applicationContext, logTopClasses = debuggable)
+        ListeningState.update { it.copy(classifierActive = classifier != null) }
+        val pipeline = DetectionPipeline(config, classifier, startEpochMs = startMs) { events.trySend(it) }
+        val record = createAudioRecord(sampleRate)
         try {
             record.startRecording()
             val chunk = ShortArray(sampleRate / 2) // 0.5 s per read: few wake-ups, low CPU
@@ -168,6 +171,7 @@ class ListeningService : Service() {
         } finally {
             record.stop()
             record.release()
+            classifier?.close()
             withContext(NonCancellable) {
                 pipeline.finish()
                 events.close()

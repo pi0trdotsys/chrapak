@@ -26,7 +26,13 @@ data class DetectionConfig(
     /** Audio kept per clip beyond the pre-roll; the event's duration is still recorded in full. */
     val maxClipMs: Int = 60_000,
     val classifyEveryMs: Long = 1_000,
-    val minConfidence: Float = 0.5f,
+    /**
+     * Highest "Snoring" probability over an episode must reach this. Measured with YAMNet on a
+     * phone: imitated snoring reached 0.74, while silence, speech and claps stayed at or below
+     * 0.02. A low bar costs a few false events in the morning list; a high one would miss real
+     * snoring, which is the worse mistake. Tune it on real nights.
+     */
+    val minConfidence: Float = 0.3f,
 )
 
 /**
