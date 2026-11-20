@@ -45,13 +45,18 @@ import app.chrapak.schedule.AutoListenNotifier
 import app.chrapak.schedule.AutoListenPrefs
 import app.chrapak.schedule.AutoListenScheduler
 import app.chrapak.schedule.NapDetector
-import app.chrapak.schedule.NapProbation
+import app.chrapak.schedule.NapJudge
+import app.chrapak.schedule.NapVerdict
+import app.chrapak.schedule.NapStage
 import app.chrapak.schedule.NapSensors
 import app.chrapak.report.NightReport
 import app.chrapak.schedule.ScheduleMath
 import app.chrapak.schedule.SummaryNotifier
 import app.chrapak.ui.MainActivity
 import app.chrapak.ui.timeLabel
+import app.chrapak.widget.StatusWidget
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -90,7 +95,11 @@ class ListeningService : Service() {
     private var foregroundStarted = false
     private var startedByNap = false
     private var napDetector = NapDetector()
-    private var napProbation = NapProbation()
+    private var napJudge = NapJudge()
+    private var napConfirmed = false
+
+    /** Debug builds only: skip the sensor verdict, because an emulator has no real sensors. */
+    private var debugSkipSensors = false
     private var napStartedAtMs = 0L
     private var lastProbeAtMs = 0L
     private var captureStartMs = 0L
@@ -102,6 +111,17 @@ class ListeningService : Service() {
     private var screenReceiver: BroadcastReceiver? = null
     private var motionListener: TriggerEventListener? = null
     private var wakeLock: PowerManager.WakeLock? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        // The widget only needs to change when something it shows changes, not on every level update.
+        scope.launch {
+            ListeningState.status
+                .map { listOf(it.listening, it.napChecking, it.armed, it.eventCount) }
+                .distinctUntilChanged()
+                .collect { StatusWidget.refresh(applicationContext) }
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -126,8 +146,15 @@ class ListeningService : Service() {
             // Debug builds only: pretend the screen has been off for the whole quiet period, so the sensor
             // verdict, the start, the probation and the clean-up can be tested without waiting or an alarm.
             ACTION_DEBUG_FORCE_NAP -> if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                debugSkipSensors = intent?.getBooleanExtra("skip_sensors", false) == true
                 napDetector.onScreenOff(System.currentTimeMillis() - AutoListenPrefs.napQuietMin(this) * 60_000L - 1_000L)
                 evaluateNap()
+            }
+            // Debug builds only: act as if the judge had confirmed the nap, to check the Live Update starts then.
+            ACTION_DEBUG_CONFIRM_NAP -> if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 && startedByNap && job?.isActive == true) {
+                napConfirmed = true
+                ListeningState.update { it.copy(napChecking = false) }
+                refreshNotification()
             }
             else -> startListening(byWindow = false, maxMs = intent?.getLongExtra(EXTRA_MAX_MS, 0L) ?: 0L)
         }
@@ -140,6 +167,7 @@ class ListeningService : Service() {
         releaseWakeLock()
         scope.cancel()
         ListeningState.update { it.copy(armed = false, listening = false, levelDb = null) }
+        StatusWidget.refresh(applicationContext)
         super.onDestroy()
     }
 
@@ -188,7 +216,8 @@ class ListeningService : Service() {
         startedByNap = byNap
         napStartedAtMs = System.currentTimeMillis()
         lastProbeAtMs = 0L
-        napProbation = NapProbation()
+        napJudge = NapJudge()
+        napConfirmed = false
         autoStopAtMs = if (maxMs > 0) System.currentTimeMillis() + maxMs else 0L
         captureStartMs = System.currentTimeMillis()
         plannedEndMs = when {
@@ -197,7 +226,7 @@ class ListeningService : Service() {
             else -> 0L
         }
         lastNotifyAtMs = captureStartMs
-        ListeningState.update { it.copy(listening = true, sinceMs = System.currentTimeMillis(), eventCount = 0, error = null) }
+        ListeningState.update { it.copy(listening = true, napChecking = byNap, sinceMs = System.currentTimeMillis(), eventCount = 0, error = null) }
         // The notification reads the fields above, so it is built only now.
         if (!enterForeground(capturing = true)) {
             ListeningState.update { it.copy(listening = false) }
@@ -211,7 +240,7 @@ class ListeningService : Service() {
                 ListeningState.update { it.copy(error = e.message ?: "Błąd nasłuchu.") }
             } finally {
                 Log.i(AUTO_TAG, "capture ended at ${java.util.Date()}: stopRequested=$stopRequested pastAutoStop=${pastAutoStop()} windowEnded=${windowEnded()}")
-                ListeningState.update { it.copy(listening = false, levelDb = null) }
+                ListeningState.update { it.copy(listening = false, napChecking = false, levelDb = null) }
                 releaseWakeLock()
                 afterCapture()
             }
@@ -309,12 +338,13 @@ class ListeningService : Service() {
         if (!AutoListenPrefs.armed(this) || !AutoListenPrefs.napDetect(this)) return
         val now = System.currentTimeMillis()
         val minute = ScheduleMath.minuteOfDay(now, ZoneId.systemDefault())
-        if (!napDetector.shouldStartNap(now, minute, inNightWindow = AutoListenPrefs.scheduleOn(this) && insideWindow(), capturing = job?.isActive == true)) return
+        if (!napDetector.shouldStartNap(now, inNightWindow = AutoListenPrefs.scheduleOn(this) && insideWindow(), capturing = job?.isActive == true)) return
         // The time rule says yes. Before listening, a second opinion from the sensors: a covered phone,
         // or a phone that is neither flat, dark nor charging, is probably not by a sleeper's side.
         scope.launch {
             val signals = NapSensors.read(applicationContext)
-            val verdict = napDetector.assess(signals, napDetector.quietForMs(System.currentTimeMillis()))
+            val verdict = if (debugSkipSensors) NapVerdict(true, "debug: sensors skipped")
+            else napDetector.assess(signals, napDetector.quietForMs(System.currentTimeMillis()), minute)
             Log.i(AUTO_TAG, "nap: $signals -> ${verdict.allow} (${verdict.reason})")
             if (verdict.allow) {
                 withContext(Dispatchers.Main) {
@@ -325,17 +355,32 @@ class ListeningService : Service() {
     }
 
     /** During probation, listen for signs that the user is awake and call the nap off if they are heard. */
+    /**
+     * While a nap is only a candidate, look at the room every few seconds: awake sounds call it off,
+     * snoring or steady breathing confirm it, and the live status starts only after that.
+     */
     private fun probeNap(pipeline: DetectionPipeline, classifier: SnoreClassifier?) {
         val c = classifier ?: return
+        if (napConfirmed) return
         val now = System.currentTimeMillis()
-        if (!napProbation.isActive(now - napStartedAtMs) || now - lastProbeAtMs < NapProbation.CHECK_EVERY_MS) return
+        if (now - lastProbeAtMs < NapJudge.CHECK_EVERY_MS) return
         lastProbeAtMs = now
         val window = pipeline.latestWindow(c.windowSamples) ?: return
-        val awake = c.awakeScore(window)
-        Log.i(AUTO_TAG, "nap probation: awake sounds %.2f".format(awake))
-        if (napProbation.onWindow(awake)) {
-            Log.i(AUTO_TAG, "nap: called off, the room sounds awake")
-            stopRequested = true
+        val evidence = c.napEvidence(window)
+        val stage = napJudge.onWindow(evidence, now - napStartedAtMs)
+        Log.i(AUTO_TAG, "nap check: awake %.2f snoring %.2f breathing %.2f -> %s".format(evidence.awake, evidence.snoring, evidence.breathing, stage))
+        when (stage) {
+            NapStage.CONFIRMED -> {
+                napConfirmed = true
+                ListeningState.update { it.copy(napChecking = false) }
+                // Only now does the notification become a Live Update.
+                refreshNotification()
+            }
+            NapStage.ABORTED -> {
+                Log.i(AUTO_TAG, "nap: dropped, no sign of a sleeper or the room sounds awake")
+                stopRequested = true
+            }
+            NapStage.CHECKING -> Unit
         }
     }
 
@@ -443,6 +488,7 @@ class ListeningService : Service() {
                 if (now - lastNotifyAtMs >= NOTIFICATION_REFRESH_MS) {
                     lastNotifyAtMs = now
                     refreshNotification()
+                    StatusWidget.refresh(applicationContext)
                 }
             }
         } finally {
@@ -536,7 +582,12 @@ class ListeningService : Service() {
             .setSmallIcon(R.drawable.ic_stat_chrapak)
             .setOngoing(true)
             .setContentIntent(open)
-        if (capturing) {
+        if (capturing && startedByNap && !napConfirmed) {
+            // A guess is not shown as a nap: a plain notification, no chip, no progress bar.
+            builder.setContentTitle("Sprawdzam, czy to drzemka")
+                .setContentText("Słucham kilka minut. Potwierdzę po oddechu lub chrapaniu w cichym pokoju.")
+                .addAction(action(getString(R.string.notification_stop), ACTION_STOP, android.R.drawable.ic_media_pause, 0))
+        } else if (capturing) {
             val kind = when {
                 startedByNap -> "Drzemka w toku"
                 startedByWindow -> "Noc w toku"
@@ -605,6 +656,7 @@ class ListeningService : Service() {
         const val ACTION_WATCHDOG = "app.chrapak.action.WATCHDOG"
         const val ACTION_NAP_CHECK = "app.chrapak.action.NAP_CHECK"
         const val ACTION_DEBUG_FORCE_NAP = "app.chrapak.action.DEBUG_FORCE_NAP"
+        const val ACTION_DEBUG_CONFIRM_NAP = "app.chrapak.action.DEBUG_CONFIRM_NAP"
         const val EXTRA_MAX_MS = "max_ms"
         /** A Quick Settings nap stops by itself after this long. */
         const val NAP_MAX_MS = 3 * 60 * 60 * 1000L

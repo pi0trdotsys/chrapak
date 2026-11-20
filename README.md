@@ -9,7 +9,7 @@ Projekt ma dwie części:
 | Część | Gdzie | Stan |
 |---|---|---|
 | **Makieta interaktywna** (React, dane testowe) | `src/` | gotowa, z pięcioma motywami wyglądu |
-| **Aplikacja na Androida** (Kotlin, Jetpack Compose) | `android/` | działa na telefonie: automatyczny nasłuch (noc i drzemki), detekcja dwustopniowa, raport z Health Connect, analiza nagrań, motywy z Material You. Czeka na test pełnej nocy |
+| **Aplikacja na Androida** (Kotlin, Jetpack Compose) | `android/` | działa na telefonie: automatyczny nasłuch (noc i drzemki o każdej porze poza nocą, potwierdzane dźwiękiem), detekcja dwustopniowa, raport z Health Connect, analiza nagrań, widżet, aktywność na żywo, motywy z Material You. Czeka na test pełnej nocy |
 
 Docelowy sprzęt: telefon z Androidem (mikrofon), **RingConn Gen 2 Air** i **Xiaomi Smart Band 10** jako źródła danych o śnie przez Health Connect.
 
@@ -34,6 +34,16 @@ Zrzuty z telefonu (Poco z Androidem 17, motyw Ciemny). Raport i nagrania pokazuj
     <td align="center"><img src="docs/screens/ustawienia-wyglad.png" width="230" alt="Wybór motywu"><br><sub>Ustawienia: wygląd</sub></td>
   </tr>
 </table>
+
+### Widżet i aktywność na żywo
+
+Widżet 1×1 / 2×1 na ekran główny pokazuje bieżący stan: Nasłuch, Czuwam, Sprawdzam (kandydat na drzemkę czeka na potwierdzenie) albo Wyłączony. Na Androidzie 16+ trwający nasłuch jest też promowanym powiadomieniem, czyli chipem z czasem w pasku stanu. Chip pojawia się dopiero wtedy, gdy drzemka jest potwierdzona dźwiękiem w pokoju, więc fałszywy alarm go nie pokazuje.
+
+<img src="docs/screens/widget-stany.png" width="460" alt="Widżet w czterech stanach: Wyłączony, Czuwam, Sprawdzam, Nasłuch">
+
+<img src="docs/screens/live-update-chip.png" width="360" alt="Chip aktywności na żywo w pasku stanu">
+
+> Zrzuty widżetu i chipa pochodzą z emulatora Androida (z telefonu nie robiłem ich, bo ekran blokady i pasek stanu pokazują dane osobiste). Wygląd na Poco może się nieco różnić.
 
 ### Motywy w aplikacji
 

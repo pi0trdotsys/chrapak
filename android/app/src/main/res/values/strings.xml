@@ -11,4 +11,5 @@
     <string name="notification_not_started_title">Nasłuch nie wystartował</string>
     <string name="notification_not_started_text">Android nie pozwolił włączyć mikrofonu w tle. Otwórz Chrapak, aby wznowić czuwanie.</string>
     <string name="tile_label">Chrapak</string>
+    <string name="widget_description">Bieżący stan nasłuchu: słucham, czuwam albo wyłączony</string>
 </resources>

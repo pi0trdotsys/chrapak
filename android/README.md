@@ -73,18 +73,26 @@ Ustawienia → **Wygląd**: Systemowy (jasny w dzień, ciemny w nocy), Jasny, Ci
 
 ## Powiadomienia
 
-- **Live Update (Android 16+).** Nasłuch w toku jest promowanym powiadomieniem z licznikiem czasu, liczbą epizodów i paskiem postępu do końca okna lub drzemki (przy ręcznym nasłuchu pasek jest nieokreślony). System może pokazać je jako chip w pasku stanu. Sprawdzone na Androidzie 17: powiadomienie ma flagę `PROMOTED_ONGOING`. Na starszych wersjach to zwykłe trwałe powiadomienie z licznikiem.
+- **Live Update (Android 16+).** Nasłuch w toku (przy drzemce dopiero po jej potwierdzeniu) jest promowanym powiadomieniem z licznikiem czasu, liczbą epizodów i paskiem postępu do końca okna lub drzemki (przy ręcznym nasłuchu pasek jest nieokreślony). System może pokazać je jako chip w pasku stanu. Sprawdzone na Androidzie 17: powiadomienie ma flagę `PROMOTED_ONGOING`. Na starszych wersjach to zwykłe trwałe powiadomienie z licznikiem.
 - **Podsumowanie po nocy.** Gdy nasłuch się kończy, powiadomienie mówi, ile trwało chrapanie, ile było epizodów i jaki jest wynik. Dotknięcie otwiera Raport. Można je wyłączyć w Ustawieniach.
 - **Alerty.** „Nasłuch nie wystartował”, gdy Android nie pozwolił włączyć mikrofonu w tle albo po restarcie telefonu.
 
 Wszystkie powiadomienia są lokalne. Prawdziwy push z serwera (FCM) wymagałby własnego backendu i nie jest potrzebny do niczego powyżej.
+
+## Widżet
+
+Mały widżet na ekran główny (1×1 lub 2×1, da się zmieniać rozmiar) pokazuje bieżący stan: **Nasłuch** (czas i liczba epizodów), **Czuwam** (z godziną startu), **Sprawdzam** (kandydat na drzemkę czeka na potwierdzenie), **Czuwanie przerwane** albo **Wyłączony**. Dotknięcie otwiera aplikację. Kolory podążają za jasnym i ciemnym trybem telefonu. W Ustawieniach jest jego podgląd i przycisk „Dodaj na ekran główny”.
+
+Treść wylicza czysta funkcja ([`WidgetModel`](app/src/main/kotlin/app/chrapak/widget/WidgetModel.kt)) pokryta testami, a widżet odświeża się przy zmianie stanu usługi, co minutę podczas nasłuchu oraz przy starcie aplikacji i po restarcie telefonu. Nie budzi procesora poza tym. Sprawdzone na emulatorze, jeszcze nie na telefonie.
+
+<img src="../docs/screens/widget-stany.png" width="460" alt="Widżet w czterech stanach: Wyłączony, Czuwam, Sprawdzam, Nasłuch">
 
 ## Automatyczny nasłuch
 
 Nasłuch startuje sam, bez otwierania aplikacji. Ustawienia → **Automatyczny nasłuch** włącza **czuwanie**: usługa żyje w tle z powiadomieniem „Czuwam”, ale nic nie nagrywa i nie zużywa energii (mikrofon wyłączony). Gdy zaczyna się okno (domyślnie 23:00–07:00), usługa sama włącza mikrofon, a po końcu okna kończy nasłuch i wraca do czuwania.
 
 - **Dlaczego czuwanie, a nie samo uruchamianie z alarmu.** Android nie pozwala włączyć mikrofonu usłudze startowanej z tła. Usługa uruchomiona raz, gdy aplikacja jest widoczna, zachowuje ten dostęp i może później otworzyć mikrofon przy wygaszonym ekranie. Sprawdzone na telefonie (Android 17, HyperOS): nasłuch wystartował z alarmu przy ekranie wygaszonym i aplikacji w tle.
-- **Drzemki.** Kafelek „Chrapak” w Szybkich ustawieniach włącza nasłuch jednym dotknięciem na 3 godziny albo do ponownego dotknięcia. Można też włączyć wykrywanie drzemek (patrz niżej).
+- **Drzemki.** Kafelek „Chrapak” w Szybkich ustawieniach włącza nasłuch jednym dotknięciem na 3 godziny albo do ponownego dotknięcia. Można też włączyć wykrywanie drzemek o dowolnej porze poza nocą (patrz niżej).
 - **Pierścień nie może być wyzwalaczem na żywo.** RingConn zapisuje do Health Connect z opóźnieniem godzin (mediana: sen ok. 9,4 h, tętno ok. 4 h, SpO₂ ok. 6 h), więc Health Connect dowiaduje się o śnie dopiero po fakcie. Ustawienia pokazują ten pomiar dla każdej aplikacji.
 - **Po restarcie telefonu lub aktualizacji** czuwanie wraca po otwarciu aplikacji. Android 15 i nowszy zabrania uruchamiania mikrofonu z odbiornika startu systemu, więc aplikacja przypomina powiadomieniem.
 - **Gdy Android nie pozwoli** włączyć mikrofonu w tle, użytkownik dostaje powiadomienie „Nasłuch nie wystartował”, zamiast cichej porażki.
@@ -94,13 +102,16 @@ Nasłuch startuje sam, bez otwierania aplikacji. Ustawienia → **Automatyczny n
 
 Drzemkę zgaduję z tego, co widzi telefon, więc to domysł, który trzeba chronić przed pomyłką. Kolejne zabezpieczenia:
 
-1. **Reguła czasu** ([`NapDetector`](app/src/main/kotlin/app/chrapak/schedule/NapDetector.kt)): czuwanie włączone, poza oknem nocnym, pora 11:00–20:00, ekran wygaszony od 15 minut i brak istotnego ruchu (czujnik ruchu, który się nie budzi, dopóki telefon nie jest przenoszony).
-2. **Druga opinia z czujników** przy samej decyzji: telefon zasłonięty (kieszeń, torba) wyklucza start, a potrzebne są co najmniej dwie oznaki z czterech: leży płasko, jest ciemno, jest podłączony do ładowarki, cisza trwa dwa razy dłużej niż wymagane. Nieznany czujnik nie wnosi nic i niczego nie wyklucza.
-3. **Próba dźwiękowa**: przez pierwsze 5 minut drzemki YAMNet co 15 s sprawdza, czy w pokoju słychać mowę, telewizję, muzykę, pisanie albo kroki. Dwa takie okna odwołują drzemkę.
-4. **Sprzątanie**: drzemka bez żadnego chrapania jest usuwana, więc raport nie zapełnia się pustymi wpisami.
-5. **Koniec** drzemki to pierwsze włączenie ekranu albo limit 3 godzin, a po zakończeniu detektor nie startuje od razu ponownie.
+Detektor działa **przez całą dobę poza oknem nocnym**, a o nietypowej porze wymaga więcej dowodów. Kolejne zabezpieczenia:
 
-Logika jest pokryta testami jednostkowymi. Na telefonie potwierdzono: odczyt czujników i decyzję (nie zasłonięty, leży płasko, 37 lx, ładowarka, czyli dwie oznaki), próbę dźwiękową co 15 s, zakończenie drzemki i usunięcie pustej drzemki z bazy. **Nie potwierdzono jeszcze całej ścieżki od wygaszenia ekranu przez alarm do startu**: dwie próby przerwało włączenie ekranu, więc to wymaga prawdziwej drzemki.
+1. **Reguła czasu** ([`NapDetector`](app/src/main/kotlin/app/chrapak/schedule/NapDetector.kt)): czuwanie włączone, poza oknem nocnym, ekran wygaszony od 15 minut i brak istotnego ruchu (czujnik ruchu, który się nie budzi, dopóki telefon nie jest przenoszony).
+2. **Druga opinia z czujników** przy samej decyzji. Wykluczają start: telefon zasłonięty (kieszeń, torba) albo **trzymany** (drobne drgania akcelerometru: ręka, kolana, kanapa). Poza tym potrzeba oznak: leży płasko, jest ciemno (nie liczy się, gdy telefon leży ekranem w dół, bo wtedy czujnik światła pokazuje zero w każdym pokoju), jest podłączony do ładowarki, cisza trwa dwa razy dłużej niż wymagane. W typowych godzinach drzemki (11:00–20:00) wystarczą **dwie**, o innej porze potrzeba **trzech**. Nieznany czujnik nie wnosi nic i niczego nie wyklucza.
+3. **Potwierdzenie dźwiękiem** ([`NapJudge`](app/src/main/kotlin/app/chrapak/schedule/NapJudge.kt)): to, że telefon leży i milczy, jeszcze nie jest drzemką, więc start jest tylko *kandydatem*. YAMNet co 15 s słucha pokoju przez najwyżej 20 minut. Dwa okna z mową, telewizją, muzyką, pisaniem albo krokami **odwołują** kandydata. Chrapanie (≥ 0,3 i więcej niż dźwięki czuwania) albo spokojny oddech w trzech oknach **potwierdzają** drzemkę. Sama cisza nie rozstrzyga, a po 20 minutach bez śladu śpiącego kandydat jest porzucany.
+4. **Aktywność na żywo dopiero po potwierdzeniu.** Dopóki trwa sprawdzanie, powiadomienie jest zwykłe, bez chipa w pasku stanu, a widżet pokazuje „Sprawdzam”. Fałszywy kandydat nigdy nie wygląda jak drzemka.
+5. **Sprzątanie**: drzemka bez żadnego chrapania jest usuwana, więc raport nie zapełnia się pustymi wpisami.
+6. **Koniec** drzemki to pierwsze włączenie ekranu albo limit 3 godzin, a po zakończeniu detektor nie startuje od razu ponownie.
+
+Logika (reguły czasu, oznaki, weto, sędzia) jest pokryta testami jednostkowymi. Na telefonie potwierdzono wcześniejszą wersję: odczyt czujników i decyzję (nie zasłonięty, leży płasko, 37 lx, ładowarka), próbę dźwiękową co 15 s, zakończenie drzemki i usunięcie pustej drzemki z bazy. Nowe kryteria (weto „trzymany”, ciemność tylko ekranem w górę, trzy oznaki o nietypowej porze, dwustopniowe potwierdzenie) sprawdzono na emulatorze i testami jednostkowymi. **Nie potwierdzono jeszcze na telefonie całej ścieżki od wygaszenia ekranu przez alarm do startu**: wcześniejsze próby przerwało włączenie ekranu, więc to wymaga prawdziwej drzemki.
 
 ### HyperOS wstrzymuje bezczynne aplikacje
 

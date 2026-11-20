@@ -20,7 +20,15 @@ class DebugReceiver : BroadcastReceiver() {
             return
         }
         if (intent.action == "app.chrapak.debug.FORCE_NAP") {
-            context.startService(Intent(context, app.chrapak.service.ListeningService::class.java).setAction(app.chrapak.service.ListeningService.ACTION_DEBUG_FORCE_NAP))
+            context.startService(
+                Intent(context, app.chrapak.service.ListeningService::class.java)
+                    .setAction(app.chrapak.service.ListeningService.ACTION_DEBUG_FORCE_NAP)
+                    .putExtra("skip_sensors", intent.getBooleanExtra("skip_sensors", false)),
+            )
+            return
+        }
+        if (intent.action == "app.chrapak.debug.CONFIRM_NAP") {
+            context.startService(Intent(context, app.chrapak.service.ListeningService::class.java).setAction(app.chrapak.service.ListeningService.ACTION_DEBUG_CONFIRM_NAP))
             return
         }
         if (intent.action == "app.chrapak.debug.STOP_LISTENING") {

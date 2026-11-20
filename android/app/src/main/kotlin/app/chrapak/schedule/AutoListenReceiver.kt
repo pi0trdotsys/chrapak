@@ -53,6 +53,7 @@ class AutoListenReceiver : BroadcastReceiver() {
                 }
             }
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_TIME_CHANGED -> {
+                app.chrapak.widget.StatusWidget.refresh(context)
                 if (AutoListenPrefs.armed(context)) {
                     AutoListenScheduler.reschedule(context)
                     // After a restart or an update the standby service is gone and cannot be started from here.

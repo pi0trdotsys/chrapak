@@ -89,7 +89,7 @@ fun TonightScreen(onOpenSettings: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Header(status.listening, status.armed)
+        Header(status.listening, status.armed, status.napChecking)
         ListenButton(listening = status.listening, onClick = toggle)
         StatusBlock(status.listening, status.sinceMs, status.eventCount, status.classifierActive, status.levelDb)
         status.error?.let { Text(it, color = Palette.destructive, textAlign = TextAlign.Center) }
@@ -106,7 +106,7 @@ fun TonightScreen(onOpenSettings: () -> Unit) {
 }
 
 @Composable
-private fun Header(listening: Boolean, armed: Boolean) {
+private fun Header(listening: Boolean, armed: Boolean, checkingNap: Boolean) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Image(
@@ -118,6 +118,7 @@ private fun Header(listening: Boolean, armed: Boolean) {
             Text("chrapak", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         }
         val (dot, text) = when {
+            listening && checkingNap -> Palette.amber to "Sprawdzam drzemkę"
             listening -> Palette.teal to "Nasłuch aktywny"
             armed -> Palette.primary to "Czuwam"
             else -> Palette.mutedForeground to "Spokojnej nocy"

@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.update
 
 data class ListeningStatus(
     val listening: Boolean = false,
+    /** A nap was guessed and is being checked against the sounds in the room; not yet a confirmed nap. */
+    val napChecking: Boolean = false,
     /** Standby is on: the service is waiting for the daily window and will start listening by itself. */
     val armed: Boolean = false,
     val sinceMs: Long? = null,

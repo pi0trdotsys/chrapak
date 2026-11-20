@@ -106,7 +106,7 @@ fun AutoListenCard() {
                 }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Wykrywaj drzemki w ciągu dnia", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text("Wykrywaj drzemki", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Switch(
                     checked = napDetect,
                     onCheckedChange = {
@@ -118,7 +118,7 @@ fun AutoListenCard() {
             }
             if (napDetect) {
                 Text(
-                    "Gdy jest 11:00–20:00, ekran jest wygaszony od 15 minut, a telefon leży nieruchomo, zakładam drzemkę i włączam nasłuch. Kończy się po włączeniu ekranu albo po 3 godzinach. To domysł: telefon leżący na biurku wygląda tak samo, dlatego fałszywy start jest tani i kończy się sam.",
+                    "Poza oknem nocnym, gdy ekran jest wygaszony od 15 minut, a telefon leży nieruchomo (nie w kieszeni ani w ręku), zaczynam sprawdzać, czy to drzemka. Słucham kilka minut: jeśli słychać mowę, telewizję czy kroki, odpuszczam. Dopiero oddech lub chrapanie w cichym pokoju potwierdzają drzemkę, a wtedy pokazuję status na żywo. Kończy się po włączeniu ekranu albo po 3 godzinach.",
                     color = Palette.mutedForeground,
                     style = MaterialTheme.typography.bodySmall,
                 )

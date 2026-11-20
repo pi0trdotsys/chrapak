@@ -18,6 +18,7 @@ class YamnetClassifier private constructor(
     private val labels: List<String>,
     private val snoringIndex: Int,
     private val awakeIndices: IntArray,
+    private val breathingIndex: Int,
     private val logTopClasses: Boolean,
 ) : SnoreClassifier, AutoCloseable {
     override val windowSamples = WINDOW_SAMPLES
@@ -34,9 +35,13 @@ class YamnetClassifier private constructor(
         return flatOutput[snoringIndex]
     }
 
-    override fun awakeScore(window: ShortArray): Float {
+    override fun napEvidence(window: ShortArray): NapEvidence {
         infer(window)
-        return awakeIndices.maxOfOrNull { flatOutput[it] } ?: 0f
+        return NapEvidence(
+            awake = awakeIndices.maxOfOrNull { flatOutput[it] } ?: 0f,
+            snoring = flatOutput[snoringIndex],
+            breathing = if (breathingIndex >= 0) flatOutput[breathingIndex] else 0f,
+        )
     }
 
     /** All 521 class probabilities for one window, for the clip analysis screen. */
@@ -84,7 +89,7 @@ class YamnetClassifier private constructor(
             val interpreter = Interpreter(buffer, Interpreter.Options().setNumThreads(1))
             Log.i(TAG, "loaded: input ${interpreter.getInputTensor(0).shape().toList()}, output ${interpreter.getOutputTensor(0).shape().toList()}, Snoring=$snoring")
             val awake = AWAKE_LABELS.mapNotNull { YamnetLabels.indexOf(labels, it) }.toIntArray()
-            YamnetClassifier(interpreter, labels, snoring, awake, logTopClasses)
+            YamnetClassifier(interpreter, labels, snoring, awake, YamnetLabels.indexOf(labels, "Breathing") ?: -1, logTopClasses)
         } catch (e: Exception) {
             Log.w(TAG, "classifier unavailable, using the gate alone: ${e.message}")
             null

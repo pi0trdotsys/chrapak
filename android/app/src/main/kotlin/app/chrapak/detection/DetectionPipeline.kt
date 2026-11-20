@@ -12,11 +12,14 @@ interface SnoreClassifier {
     fun score(window: ShortArray): Float
 
     /**
-     * Probability (0..1) that the window contains sounds of someone awake and active: speech,
-     * television, music, typing, footsteps. Used to call off a nap that was only a guess.
+     * What the window says about the person near the phone: awake and busy (speech, television,
+     * music, typing, footsteps), snoring, or breathing. Used to confirm or call off a nap guess.
      */
-    fun awakeScore(window: ShortArray): Float = 0f
+    fun napEvidence(window: ShortArray): NapEvidence = NapEvidence(0f, 0f, 0f)
 }
+
+/** Probabilities (0..1) from one window of audio, as far as the nap decision needs them. */
+data class NapEvidence(val awake: Float, val snoring: Float, val breathing: Float)
 
 /** Confidence reported for events accepted by the gate alone, when no classifier is installed. */
 const val GATE_ONLY_CONFIDENCE = 0.5f
