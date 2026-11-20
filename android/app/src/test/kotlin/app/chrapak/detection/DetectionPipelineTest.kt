@@ -82,6 +82,16 @@ class DetectionPipelineTest {
     }
 
     @Test
+    fun `sparse clicks over many seconds are not an episode`() {
+        // A 0.1 s loud tick every 3 s for 30 s: lots of span, hardly any active time.
+        val tick = TestSignals.snore(0.1)
+        val gap = TestSignals.silence(2.9, seed = 9)
+        val parts = (0 until 10).flatMap { listOf(tick, gap) }
+        val (events, _) = run(classifier = null, signal = TestSignals.concat(TestSignals.silence(3.0), *parts.toTypedArray(), TestSignals.silence(8.0)))
+        assertEquals(0, events.size)
+    }
+
+    @Test
     fun `finish emits an episode still open when listening stops`() {
         val cut = TestSignals.concat(TestSignals.silence(10.0), TestSignals.snore(5.0))
         val (events, _) = run(classifier = null, signal = cut)

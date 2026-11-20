@@ -25,6 +25,7 @@ import app.chrapak.R
 import app.chrapak.audio.WavWriter
 import app.chrapak.data.ChrapakDatabase
 import app.chrapak.data.NightEntity
+import app.chrapak.data.closeOrphanedNights
 import app.chrapak.data.SnoreEventEntity
 import app.chrapak.detection.DetectedEvent
 import app.chrapak.detection.DetectionConfig
@@ -112,6 +113,7 @@ class ListeningService : Service() {
         val sampleRate = config.gate.sampleRate
         val nightId = UUID.randomUUID().toString()
         val startMs = System.currentTimeMillis()
+        closeOrphanedNights(db.nights(), db.events())
         db.nights().insert(NightEntity(id = nightId, sleepStartMs = startMs, sleepEndMs = null))
 
         val events = Channel<DetectedEvent>(Channel.UNLIMITED)

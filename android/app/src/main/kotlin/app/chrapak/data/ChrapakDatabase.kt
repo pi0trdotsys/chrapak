@@ -15,6 +15,10 @@ interface NightDao {
 
     @Query("UPDATE nights SET sleepEndMs = :endMs WHERE id = :id")
     suspend fun finish(id: String, endMs: Long)
+
+    /** Nights never closed, e.g. because the system killed the service mid-night. */
+    @Query("SELECT * FROM nights WHERE sleepEndMs IS NULL")
+    suspend fun open(): List<NightEntity>
 }
 
 @Dao
@@ -24,6 +28,9 @@ interface SnoreEventDao {
 
     @Query("SELECT COUNT(*) FROM snore_events WHERE nightId = :nightId AND falsePositive = 0")
     suspend fun count(nightId: String): Int
+
+    @Query("SELECT MAX(startMs + durationMs) FROM snore_events WHERE nightId = :nightId")
+    suspend fun lastEventEndMs(nightId: String): Long?
 }
 
 @Database(entities = [NightEntity::class, SnoreEventEntity::class], version = 1, exportSchema = true)

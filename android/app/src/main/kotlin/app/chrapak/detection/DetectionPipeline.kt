@@ -21,6 +21,8 @@ data class DetectionConfig(
     /** A breath cycle is 3-5 s and snores sit inside it, so pauses up to this long keep one episode. */
     val mergeGapMs: Long = 6_000,
     val minEventMs: Long = 3_000,
+    /** Frames actually active must add up to this much, so sparse noise does not become an episode. */
+    val minActiveMs: Long = 1_500,
     /** Audio kept per clip beyond the pre-roll; the event's duration is still recorded in full. */
     val maxClipMs: Int = 60_000,
     val classifyEveryMs: Long = 1_000,
@@ -62,7 +64,7 @@ class DetectionPipeline(
     private val onEvent: (DetectedEvent) -> Unit,
 ) {
     private val gate = EnergyGate(config.gate)
-    private val segmenter = SnoreSegmenter(config.mergeGapMs, config.minEventMs)
+    private val segmenter = SnoreSegmenter(config.mergeGapMs, config.minEventMs, config.minActiveMs)
     private val sampleRate = config.gate.sampleRate
     private val frameSamples = config.gate.frameSamples
     private val frame = ShortArray(frameSamples)

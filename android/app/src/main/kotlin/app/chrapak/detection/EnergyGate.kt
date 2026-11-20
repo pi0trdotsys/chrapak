@@ -26,9 +26,10 @@ data class GateConfig(
     val marginDb: Float = 8f,
     /**
      * Never activate below this absolute level (dBFS), whatever the floor says. The UNPROCESSED
-     * microphone is quiet: an empty room sits around -85 dB and imitated snoring peaks near -50 dB.
+     * microphone is quiet: an empty room sits around -85 dB with spikes to -75 dB, while imitated
+     * snoring averages around -64 dB and peaks near -50 dB.
      */
-    val absoluteMinDb: Float = -75f,
+    val absoluteMinDb: Float = -70f,
     /** Frames spent learning the room's silence before any frame can be active. */
     val warmupFrames: Int = 40,
     /** Floor follows a quieter room quickly... */
