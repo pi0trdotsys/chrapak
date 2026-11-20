@@ -9,9 +9,13 @@ import kotlin.math.roundToInt
 
 private val pl: Locale = Locale.forLanguageTag("pl-PL")
 private val timeFormat = DateTimeFormatter.ofPattern("HH:mm", pl)
+private val timeSecondsFormat = DateTimeFormatter.ofPattern("HH:mm:ss", pl)
 private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", pl)
 
 fun timeLabel(ms: Long): String = timeFormat.format(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
+
+/** For axes of very short nights, where minute labels would repeat. */
+fun timeLabelSeconds(ms: Long): String = timeSecondsFormat.format(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
 
 fun dateLabel(ms: Long): String = dateFormat.format(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
 

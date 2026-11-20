@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -48,12 +49,13 @@ import app.chrapak.ui.durationLabel
 import app.chrapak.ui.events.ClipPlayer
 import app.chrapak.ui.events.EventSheet
 import app.chrapak.ui.stageLabel
+import app.chrapak.service.ListeningState
 import app.chrapak.ui.theme.Palette
 import app.chrapak.ui.timeLabel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private data class NightData(val events: List<SnoreEventEntity>, val health: NightHealth)
+private data class NightData(val events: List<SnoreEventEntity>, val health: NightHealth, val connected: Boolean)
 
 @Composable
 fun ReportScreen(
@@ -80,7 +82,7 @@ fun ReportScreen(
     val data by produceState<NightData?>(null, night.id, version) {
         value = null
         val events = repo.events(night.id)
-        value = NightData(events, repo.health(night, events))
+        value = NightData(events, repo.health(night, events), repo.healthConnected())
     }
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -89,8 +91,12 @@ fun ReportScreen(
             Text("TWÓJ PORANNY RAPORT", style = MaterialTheme.typography.labelSmall, color = Palette.mutedForeground)
             Text("Dzień dobry, spokojnie.", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
+        val listening by ListeningState.status.collectAsState()
+        // Only the night the service is recording right now is "in progress"; an unclosed older one was cut short.
+        val inProgress = listening.listening && night.sleepEndMs == null && night.sleepStartMs >= (listening.sinceMs ?: Long.MAX_VALUE) - 10_000
         NightSelector(
             night = night,
+            inProgress = inProgress,
             canPrev = index < all.lastIndex,
             canNext = index > 0,
             onPrev = { onNightChange(all[index + 1].id) },
@@ -115,7 +121,7 @@ private fun EmptyReport() {
 }
 
 @Composable
-private fun NightSelector(night: NightEntity, canPrev: Boolean, canNext: Boolean, onPrev: () -> Unit, onNext: () -> Unit) {
+private fun NightSelector(night: NightEntity, inProgress: Boolean, canPrev: Boolean, canNext: Boolean, onPrev: () -> Unit, onNext: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = Palette.card)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onPrev, enabled = canPrev) { Text("‹") }
@@ -123,7 +129,7 @@ private fun NightSelector(night: NightEntity, canPrev: Boolean, canNext: Boolean
                 Text(dateLabel(night.sleepStartMs), style = MaterialTheme.typography.titleMedium)
                 val end = night.sleepEndMs
                 Text(
-                    if (end == null) "od ${timeLabel(night.sleepStartMs)} · w trakcie" else "${timeLabel(night.sleepStartMs)} – ${timeLabel(end)} · ${durationLabel(end - night.sleepStartMs)}",
+                    if (end == null) "od ${timeLabel(night.sleepStartMs)} · ${if (inProgress) "w trakcie" else "przerwana"}" else "${timeLabel(night.sleepStartMs)} – ${timeLabel(end)} · ${durationLabel(end - night.sleepStartMs)}",
                     color = Palette.mutedForeground,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -157,7 +163,7 @@ private fun NightContent(
         Text("Twoja noc, w szczegółach", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Card(colors = CardDefaults.cardColors(containerColor = Palette.card)) {
             Column(Modifier.padding(12.dp)) {
-                Timeline(night.sleepStartMs, endMs, data.events, data.health, onEventTap = { selected = it })
+                Timeline(night.sleepStartMs, endMs, data.events, data.health, onEventTap = { selected = it }, connected = data.connected)
                 Legend()
             }
         }

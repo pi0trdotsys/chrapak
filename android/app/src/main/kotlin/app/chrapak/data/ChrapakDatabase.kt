@@ -16,6 +16,9 @@ interface NightDao {
     @Query("UPDATE nights SET sleepEndMs = :endMs WHERE id = :id")
     suspend fun finish(id: String, endMs: Long)
 
+    @Query("DELETE FROM nights WHERE id = :id")
+    suspend fun delete(id: String)
+
     /** Nights never closed, e.g. because the system killed the service mid-night. */
     @Query("SELECT * FROM nights WHERE sleepEndMs IS NULL")
     suspend fun open(): List<NightEntity>

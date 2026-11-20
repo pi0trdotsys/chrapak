@@ -25,6 +25,7 @@ import app.chrapak.health.SleepStageType
 import app.chrapak.health.VitalPoint
 import app.chrapak.ui.theme.Palette
 import app.chrapak.ui.timeLabel
+import app.chrapak.ui.timeLabelSeconds
 import kotlin.math.abs
 
 /** Episodes at or above this band level (dBFS) are drawn in amber as "loud". */
@@ -46,6 +47,8 @@ fun Timeline(
     health: NightHealth,
     onEventTap: (SnoreEventEntity) -> Unit,
     modifier: Modifier = Modifier,
+    /** False when Health Connect is not set up; only then does the chart ask to connect it. */
+    connected: Boolean = true,
 ) {
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(color = Palette.mutedForeground, fontSize = 10.sp)
@@ -83,7 +86,8 @@ fun Timeline(
         for (i in 0..5) {
             val gx = padding + width * i / 5f
             drawLine(Palette.border, Offset(gx, 0f), Offset(gx, usable), strokeWidth = 1f)
-            val text = timeLabel(startMs + span * i / 5)
+            val tick = startMs + span * i / 5
+            val text = if (span < 10 * 60_000L) timeLabelSeconds(tick) else timeLabel(tick)
             val layout = measurer.measure(text, labelStyle)
             val tx = (gx - layout.size.width / 2f).coerceIn(0f, size.width - layout.size.width)
             drawText(layout, topLeft = Offset(tx, usable + 4.dp.toPx()))
@@ -97,8 +101,8 @@ fun Timeline(
         drawVital(health.spo2, 85.0, 100.0, ::x, spo2, usable, Palette.teal, 2.5f, dipBelow = 92.0)
         drawVital(health.heartRate, health.heartRate.minOfOrNull { it.value } ?: 50.0, (health.heartRate.maxOfOrNull { it.value } ?: 80.0).coerceAtLeast((health.heartRate.minOfOrNull { it.value } ?: 50.0) + 10), ::x, heart, usable, Palette.heart, 1.8f)
 
-        if (health.isEmpty) {
-            val layout = measurer.measure("Brak danych snu i tętna. Połącz Health Connect w Ustawieniach.", labelStyle)
+        if (health.isEmpty && !connected) {
+            val layout = measurer.measure("Połącz Health Connect w Ustawieniach, aby zobaczyć sen i tętno.", labelStyle)
             drawText(layout, topLeft = Offset(padding, lane(hypno, 0.4f)))
         }
     }

@@ -79,7 +79,7 @@ fun AppRoot(repo: NightRepository, health: HealthConnectSource) {
             val events = eventsView
             when {
                 tab == Tab.NOC -> TonightScreen()
-                tab == Tab.USTAWIENIA -> SettingsScreen(health)
+                tab == Tab.USTAWIENIA -> SettingsScreen(health, repo)
                 events != null -> EventsScreen(
                     repo = repo,
                     events = events.events,

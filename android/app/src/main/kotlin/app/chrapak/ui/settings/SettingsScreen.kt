@@ -28,16 +28,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
+import app.chrapak.data.NightRepository
 import app.chrapak.health.HealthConnectSource
+import app.chrapak.health.NightHealth
 import app.chrapak.health.HealthStatus
 import app.chrapak.health.OriginSummary
+import app.chrapak.ui.report.Timeline
 import app.chrapak.ui.theme.Palette
 
 private const val DAY_MS = 24 * 60 * 60_000L
 
 /** Settings for now: connecting Health Connect and showing which apps actually write data there. */
 @Composable
-fun SettingsScreen(health: HealthConnectSource) {
+fun SettingsScreen(health: HealthConnectSource, repo: NightRepository) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
     val launcher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { refresh++ }
@@ -98,6 +101,19 @@ fun SettingsScreen(health: HealthConnectSource) {
                         }
                     }
                     OutlinedButton(onClick = { refresh++ }, modifier = Modifier.fillMaxWidth()) { Text("Odśwież") }
+                }
+            }
+        }
+        if (granted) {
+            val now = remember(refresh) { System.currentTimeMillis() }
+            val last24h by produceState<NightHealth?>(null, refresh, granted) { value = repo.healthBetween(now - DAY_MS, now) }
+            Card(colors = CardDefaults.cardColors(containerColor = Palette.card)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Podgląd: ostatnie 24 godziny", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Tak Raport zobaczy dane z pierścienia: fazy snu, saturację i tętno.", color = Palette.mutedForeground, style = MaterialTheme.typography.bodySmall)
+                    val data = last24h
+                    if (data == null) Text("Wczytywanie…", color = Palette.mutedForeground)
+                    else Timeline(now - DAY_MS, now, emptyList(), data, onEventTap = {}, connected = true)
                 }
             }
         }

@@ -26,6 +26,7 @@ import app.chrapak.audio.WavWriter
 import app.chrapak.data.ChrapakDatabase
 import app.chrapak.data.NightEntity
 import app.chrapak.data.closeOrphanedNights
+import app.chrapak.data.finishNight
 import app.chrapak.data.SnoreEventEntity
 import app.chrapak.detection.DetectedEvent
 import app.chrapak.detection.DetectionConfig
@@ -115,7 +116,8 @@ class ListeningService : Service() {
         val nightId = UUID.randomUUID().toString()
         val startMs = System.currentTimeMillis()
         closeOrphanedNights(db.nights(), db.events())
-        db.nights().insert(NightEntity(id = nightId, sleepStartMs = startMs, sleepEndMs = null))
+        val night = NightEntity(id = nightId, sleepStartMs = startMs, sleepEndMs = null)
+        db.nights().insert(night)
 
         val events = Channel<DetectedEvent>(Channel.UNLIMITED)
         val writer = launch(Dispatchers.IO) {
@@ -176,7 +178,7 @@ class ListeningService : Service() {
                 pipeline.finish()
                 events.close()
                 writer.join()
-                db.nights().finish(nightId, System.currentTimeMillis())
+                finishNight(db.nights(), db.events(), night, System.currentTimeMillis())
             }
         }
     }

@@ -23,6 +23,11 @@ class NightRepository(
     suspend fun health(night: NightEntity, events: List<SnoreEventEntity>): NightHealth =
         health.readNight(night.sleepStartMs - PAD_MS, endOf(night, events) + PAD_MS)
 
+    suspend fun healthConnected(): Boolean = health.hasPermissions()
+
+    /** Sleep, SpO2 and heart rate for an arbitrary window; the settings preview uses the last 24 hours. */
+    suspend fun healthBetween(fromMs: Long, toMs: Long): NightHealth = health.readNight(fromMs, toMs)
+
     fun clipFile(event: SnoreEventEntity): File? =
         event.clipPath?.let { File(context.filesDir, it) }?.takeIf { it.exists() }
 
