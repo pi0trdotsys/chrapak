@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Day. The widget follows the system's light or dark setting; it cannot read the app's own theme choice. -->
+    <color name="widget_bg">#F7F5F2</color>
+    <color name="widget_text">#1A1B26</color>
+    <color name="widget_subtext">#5B5F70</color>
+</resources>

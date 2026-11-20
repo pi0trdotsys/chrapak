@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import java.time.Duration
 import java.time.Instant
 
 enum class HealthStatus { AVAILABLE, UPDATE_REQUIRED, UNAVAILABLE }
@@ -20,6 +21,12 @@ data class OriginSummary(
     val stageSegments: Int,
     val heartRateSamples: Int,
     val spo2Samples: Int,
+    /** Median minutes between a record's end and the moment the source app wrote it to Health Connect. */
+    val sleepLagMin: Long? = null,
+    val heartRateLagMin: Long? = null,
+    val spo2LagMin: Long? = null,
+    /** Minutes since the source app last wrote anything: how often it syncs. */
+    val lastWriteAgoMin: Long? = null,
 ) {
     /** Friendly name for the apps this project is built for; others show their package name. */
     val label: String
@@ -83,13 +90,24 @@ class HealthConnectSource(private val context: Context) {
         val sleep = readAll<SleepSessionRecord>(from, to).groupBy { it.metadata.dataOrigin.packageName }
         val heart = readAll<HeartRateRecord>(from, to).groupBy { it.metadata.dataOrigin.packageName }
         val oxygen = readAll<OxygenSaturationRecord>(from, to).groupBy { it.metadata.dataOrigin.packageName }
+        val now = Instant.now()
+        fun lagMin(records: List<Record>, endOf: (Record) -> Instant): Long? =
+            records.map { Duration.between(endOf(it), it.metadata.lastModifiedTime).toMinutes().coerceAtLeast(0) }
+                .sorted()
+                .let { if (it.isEmpty()) null else it[it.size / 2] }
         return (sleep.keys + heart.keys + oxygen.keys).sorted().map { pkg ->
+            val mine = sleep[pkg].orEmpty() + heart[pkg].orEmpty() + oxygen[pkg].orEmpty()
             OriginSummary(
                 packageName = pkg,
                 sleepSessions = sleep[pkg].orEmpty().size,
                 stageSegments = sleep[pkg].orEmpty().sumOf { it.stages.size },
                 heartRateSamples = heart[pkg].orEmpty().sumOf { it.samples.size },
                 spo2Samples = oxygen[pkg].orEmpty().size,
+                sleepLagMin = lagMin(sleep[pkg].orEmpty()) { (it as SleepSessionRecord).endTime },
+                heartRateLagMin = lagMin(heart[pkg].orEmpty()) { (it as HeartRateRecord).endTime },
+                spo2LagMin = lagMin(oxygen[pkg].orEmpty()) { (it as OxygenSaturationRecord).time },
+                lastWriteAgoMin = mine.maxOfOrNull { it.metadata.lastModifiedTime }
+                    ?.let { Duration.between(it, now).toMinutes().coerceAtLeast(0) },
             )
         }
     }

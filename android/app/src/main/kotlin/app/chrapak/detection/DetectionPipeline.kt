@@ -10,7 +10,16 @@ interface SnoreClassifier {
     val windowSamples: Int
 
     fun score(window: ShortArray): Float
+
+    /**
+     * What the window says about the person near the phone: awake and busy (speech, television,
+     * music, typing, footsteps), snoring, or breathing. Used to confirm or call off a nap guess.
+     */
+    fun napEvidence(window: ShortArray): NapEvidence = NapEvidence(0f, 0f, 0f)
 }
+
+/** Probabilities (0..1) from one window of audio, as far as the nap decision needs them. */
+data class NapEvidence(val awake: Float, val snoring: Float, val breathing: Float)
 
 /** Confidence reported for events accepted by the gate alone, when no classifier is installed. */
 const val GATE_ONLY_CONFIDENCE = 0.5f
@@ -122,6 +131,9 @@ class DetectionPipeline(
             }
         }
     }
+
+    /** The latest [samples] of audio for a one-off analysis, or null before that much has been heard. */
+    fun latestWindow(samples: Int): ShortArray? = if (ring.size >= samples) ring.latest(samples) else null
 
     /** Ends listening: emits the episode in progress, if it qualifies. */
     fun finish() {

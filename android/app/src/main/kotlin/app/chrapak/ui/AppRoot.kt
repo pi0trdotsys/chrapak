@@ -12,6 +12,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +26,7 @@ import app.chrapak.data.SnoreEventEntity
 import app.chrapak.health.HealthConnectSource
 import app.chrapak.health.NightHealth
 import app.chrapak.ui.events.ClipPlayer
+import app.chrapak.ui.events.ClipAnalysisScreen
 import app.chrapak.ui.events.EventsScreen
 import app.chrapak.ui.report.ReportScreen
 import app.chrapak.ui.settings.SettingsScreen
@@ -35,15 +37,25 @@ private enum class Tab(val label: String) { NOC("Noc"), RAPORT("Raport"), USTAWI
 private class EventsView(val events: List<SnoreEventEntity>, val health: NightHealth)
 
 @Composable
-fun AppRoot(repo: NightRepository, health: HealthConnectSource) {
+fun AppRoot(repo: NightRepository, health: HealthConnectSource, openReportRequest: Int = 0) {
     var tab by rememberSaveable { mutableStateOf(Tab.NOC) }
     var nightId by rememberSaveable { mutableStateOf<String?>(null) }
     var version by remember { mutableIntStateOf(0) }
     var eventsView by remember { mutableStateOf<EventsView?>(null) }
+    var analysing by remember { mutableStateOf<SnoreEventEntity?>(null) }
     val player = remember { ClipPlayer() }
+    // A tap on the morning summary asks for the report, even if the app was already open on another tab.
+    LaunchedEffect(openReportRequest) {
+        if (openReportRequest > 0) {
+            eventsView = null
+            nightId = null
+            tab = Tab.RAPORT
+        }
+    }
     DisposableEffect(Unit) { onDispose { player.stop() } }
 
-    BackHandler(enabled = eventsView != null) {
+    BackHandler(enabled = analysing != null) { analysing = null }
+    BackHandler(enabled = eventsView != null && analysing == null) {
         player.stop()
         eventsView = null
     }
@@ -58,6 +70,7 @@ fun AppRoot(repo: NightRepository, health: HealthConnectSource) {
                         onClick = {
                             player.stop()
                             eventsView = null
+                            analysing = null
                             tab = t
                         },
                         icon = {
@@ -77,8 +90,10 @@ fun AppRoot(repo: NightRepository, health: HealthConnectSource) {
     ) { padding ->
         Box(Modifier.padding(padding)) {
             val events = eventsView
+            val clip = analysing
             when {
-                tab == Tab.NOC -> TonightScreen()
+                clip != null && tab == Tab.RAPORT -> ClipAnalysisScreen(clip, repo.clipFile(clip), onBack = { analysing = null })
+                tab == Tab.NOC -> TonightScreen(onOpenSettings = { tab = Tab.USTAWIENIA })
                 tab == Tab.USTAWIENIA -> SettingsScreen(health, repo)
                 events != null -> EventsScreen(
                     repo = repo,
@@ -90,6 +105,7 @@ fun AppRoot(repo: NightRepository, health: HealthConnectSource) {
                         version++
                         eventsView = null
                     },
+                    onAnalyze = { analysing = it },
                 )
                 else -> ReportScreen(
                     repo = repo,
@@ -99,6 +115,7 @@ fun AppRoot(repo: NightRepository, health: HealthConnectSource) {
                     onNightChange = { nightId = it },
                     onOpenEvents = { e, h -> eventsView = EventsView(e, h) },
                     onChanged = { version++ },
+                    onAnalyze = { analysing = it },
                 )
             }
         }

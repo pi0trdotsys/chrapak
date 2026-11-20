@@ -23,7 +23,8 @@ import app.chrapak.data.SnoreEventEntity
 import app.chrapak.health.NightHealth
 import app.chrapak.health.SleepStageType
 import app.chrapak.health.VitalPoint
-import app.chrapak.ui.theme.Palette
+import app.chrapak.ui.theme.ChrapakPalette
+import app.chrapak.ui.theme.LocalPalette
 import app.chrapak.ui.timeLabel
 import app.chrapak.ui.timeLabelSeconds
 import kotlin.math.abs
@@ -50,8 +51,9 @@ fun Timeline(
     /** False when Health Connect is not set up; only then does the chart ask to connect it. */
     connected: Boolean = true,
 ) {
+    val colors = LocalPalette.current
     val measurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(color = Palette.mutedForeground, fontSize = 10.sp)
+    val labelStyle = TextStyle(color = colors.mutedForeground, fontSize = 10.sp)
     val span = (endMs - startMs).coerceAtLeast(1L)
 
     Canvas(
@@ -85,7 +87,7 @@ fun Timeline(
         // Grid and time labels.
         for (i in 0..5) {
             val gx = padding + width * i / 5f
-            drawLine(Palette.border, Offset(gx, 0f), Offset(gx, usable), strokeWidth = 1f)
+            drawLine(colors.border, Offset(gx, 0f), Offset(gx, usable), strokeWidth = 1f)
             val tick = startMs + span * i / 5
             val text = if (span < 10 * 60_000L) timeLabelSeconds(tick) else timeLabel(tick)
             val layout = measurer.measure(text, labelStyle)
@@ -93,13 +95,13 @@ fun Timeline(
             drawText(layout, topLeft = Offset(tx, usable + 4.dp.toPx()))
         }
         for (l in listOf(hypno, snore, spo2)) {
-            drawLine(Palette.border, Offset(padding, usable * l.second + 3.dp.toPx()), Offset(padding + width, usable * l.second + 3.dp.toPx()), strokeWidth = 1f)
+            drawLine(colors.border, Offset(padding, usable * l.second + 3.dp.toPx()), Offset(padding + width, usable * l.second + 3.dp.toPx()), strokeWidth = 1f)
         }
 
-        drawStages(health, ::x, hypno, usable)
-        drawSnore(events, ::x, snore, usable)
-        drawVital(health.spo2, 85.0, 100.0, ::x, spo2, usable, Palette.teal, 2.5f, dipBelow = 92.0)
-        drawVital(health.heartRate, health.heartRate.minOfOrNull { it.value } ?: 50.0, (health.heartRate.maxOfOrNull { it.value } ?: 80.0).coerceAtLeast((health.heartRate.minOfOrNull { it.value } ?: 50.0) + 10), ::x, heart, usable, Palette.heart, 1.8f)
+        drawStages(colors, health, ::x, hypno, usable)
+        drawSnore(colors, events, ::x, snore, usable)
+        drawVital(colors, health.spo2, 85.0, 100.0, ::x, spo2, usable, colors.teal, 2.5f, dipBelow = 92.0)
+        drawVital(colors, health.heartRate, health.heartRate.minOfOrNull { it.value } ?: 50.0, (health.heartRate.maxOfOrNull { it.value } ?: 80.0).coerceAtLeast((health.heartRate.minOfOrNull { it.value } ?: 50.0) + 10), ::x, heart, usable, colors.heart, 1.8f)
 
         if (health.isEmpty && !connected) {
             val layout = measurer.measure("Połącz Health Connect w Ustawieniach, aby zobaczyć sen i tętno.", labelStyle)
@@ -108,16 +110,16 @@ fun Timeline(
     }
 }
 
-private fun DrawScope.drawStages(health: NightHealth, x: (Long) -> Float, lane: Pair<Float, Float>, usable: Float) {
+private fun DrawScope.drawStages(colors: ChrapakPalette, health: NightHealth, x: (Long) -> Float, lane: Pair<Float, Float>, usable: Float) {
     val top = usable * lane.first
     val rowHeight = usable * (lane.second - lane.first) / 4f
     for (segment in health.stages) {
         val row = STAGE_ROW.getValue(segment.stage)
         val color = when (segment.stage) {
-            SleepStageType.AWAKE -> Palette.sleepAwake
-            SleepStageType.REM -> Palette.primary
-            SleepStageType.LIGHT -> Palette.sleepLight
-            SleepStageType.DEEP -> Palette.sleepDeep
+            SleepStageType.AWAKE -> colors.sleepAwake
+            SleepStageType.REM -> colors.primary
+            SleepStageType.LIGHT -> colors.sleepLight
+            SleepStageType.DEEP -> colors.sleepDeep
         }
         val left = x(segment.startMs)
         drawRoundRect(
@@ -129,14 +131,14 @@ private fun DrawScope.drawStages(health: NightHealth, x: (Long) -> Float, lane: 
     }
 }
 
-private fun DrawScope.drawSnore(events: List<SnoreEventEntity>, x: (Long) -> Float, lane: Pair<Float, Float>, usable: Float) {
+private fun DrawScope.drawSnore(colors: ChrapakPalette, events: List<SnoreEventEntity>, x: (Long) -> Float, lane: Pair<Float, Float>, usable: Float) {
     val top = usable * lane.first
     val bottom = usable * lane.second
     val laneHeight = bottom - top
     for (event in events.filter { !it.falsePositive }) {
         val level = ((event.peakDb - QUIET_FLOOR_DB) / (LOUD_CEILING_DB - QUIET_FLOOR_DB)).coerceIn(0.15f, 1f)
         val barHeight = laneHeight * level
-        val color = if (event.peakDb >= LOUD_DB) Palette.amber else Palette.primary.copy(alpha = 0.75f)
+        val color = if (event.peakDb >= LOUD_DB) colors.amber else colors.primary.copy(alpha = 0.75f)
         // An episode is a time span: draw it at least 4dp wide so short ones stay tappable and visible.
         val left = x(event.startMs)
         val barWidth = (x(event.startMs + event.durationMs) - left).coerceAtLeast(4.dp.toPx())
@@ -145,6 +147,7 @@ private fun DrawScope.drawSnore(events: List<SnoreEventEntity>, x: (Long) -> Flo
 }
 
 private fun DrawScope.drawVital(
+    colors: ChrapakPalette,
     points: List<VitalPoint>,
     min: Double,
     max: Double,
@@ -165,6 +168,6 @@ private fun DrawScope.drawVital(
     }
     drawPath(path, color, style = Stroke(width = strokeWidth.dp.toPx() / 2f))
     if (dipBelow != null) {
-        for (p in points.filter { it.value < dipBelow }) drawCircle(Palette.amber, 3.dp.toPx(), Offset(x(p.tsMs), y(p.value)))
+        for (p in points.filter { it.value < dipBelow }) drawCircle(colors.amber, 3.dp.toPx(), Offset(x(p.tsMs), y(p.value)))
     }
 }

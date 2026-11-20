@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon/icon.svg" alt="Ikona Chrapak" width="120"></p>
+
 # Chrapak
 
 Aplikacja, która **nagrywa i analizuje Twoje chrapanie podczas snu** oraz zestawia je z danymi z pierścienia i opaski: fazami snu, saturacją (SpO₂) i tętnem. Nagrania zostają na telefonie.
@@ -7,11 +9,54 @@ Projekt ma dwie części:
 | Część | Gdzie | Stan |
 |---|---|---|
 | **Makieta interaktywna** (React, dane testowe) | `src/` | gotowa, z pięcioma motywami wyglądu |
-| **Aplikacja na Androida** (Kotlin, Jetpack Compose) | `android/` | działa na telefonie: nasłuch z detekcją, raport z Health Connect, nagrania. Czeka na test pełnej nocy |
+| **Aplikacja na Androida** (Kotlin, Jetpack Compose) | `android/` | działa na telefonie: automatyczny nasłuch (noc i drzemki o każdej porze poza nocą, potwierdzane dźwiękiem), detekcja dwustopniowa, raport z Health Connect, analiza nagrań, widżet, aktywność na żywo, motywy z Material You. Czeka na test pełnej nocy |
 
 Docelowy sprzęt: telefon z Androidem (mikrofon), **RingConn Gen 2 Air** i **Xiaomi Smart Band 10** jako źródła danych o śnie przez Health Connect.
 
-## Motywy wyglądu
+## Aplikacja na Androida: zrzuty ekranu
+
+Zrzuty z telefonu (Poco z Androidem 17, motyw Ciemny). Raport i nagrania pokazują dane testowe: naśladowane chrapanie z kilkuminutowych prób, a nie prawdziwą noc.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screens/noc-nasluch.png" width="230" alt="Ekran Noc podczas nasłuchu"><br><sub>Noc: nasłuch trwa</sub></td>
+    <td align="center"><img src="docs/screens/noc-gotowosc.png" width="230" alt="Ekran Noc, czuwanie i lista kontrolna"><br><sub>Noc: czuwanie i lista kontrolna</sub></td>
+    <td align="center"><img src="docs/screens/raport.png" width="230" alt="Poranny raport"><br><sub>Raport</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screens/raport-os-czasu.png" width="230" alt="Oś czasu nocy"><br><sub>Oś czasu i wnioski</sub></td>
+    <td align="center"><img src="docs/screens/nagrania.png" width="230" alt="Lista nagrań chrapania"><br><sub>Nagrania</sub></td>
+    <td align="center"><img src="docs/screens/analiza.png" width="230" alt="Analiza nagrania"><br><sub>Analiza: rytm, przerwy, pasma</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screens/analiza-model.png" width="230" alt="Co słyszy model YAMNet"><br><sub>Analiza: co słyszy YAMNet</sub></td>
+    <td align="center"><img src="docs/screens/ustawienia.png" width="230" alt="Ustawienia automatycznego nasłuchu"><br><sub>Ustawienia: automat</sub></td>
+    <td align="center"><img src="docs/screens/ustawienia-wyglad.png" width="230" alt="Wybór motywu"><br><sub>Ustawienia: wygląd</sub></td>
+  </tr>
+</table>
+
+### Widżet i aktywność na żywo
+
+Widżet 1×1 / 2×1 na ekran główny pokazuje bieżący stan: Nasłuch, Czuwam, Sprawdzam (kandydat na drzemkę czeka na potwierdzenie) albo Wyłączony. Na Androidzie 16+ trwający nasłuch jest też promowanym powiadomieniem, czyli chipem z czasem w pasku stanu. Chip pojawia się dopiero wtedy, gdy drzemka jest potwierdzona dźwiękiem w pokoju, więc fałszywy alarm go nie pokazuje.
+
+<img src="docs/screens/widget-stany.png" width="460" alt="Widżet w czterech stanach: Wyłączony, Czuwam, Sprawdzam, Nasłuch">
+
+<img src="docs/screens/live-update-chip.png" width="360" alt="Chip aktywności na żywo w pasku stanu">
+
+> Zrzuty widżetu i chipa pochodzą z emulatora Androida (z telefonu nie robiłem ich, bo ekran blokady i pasek stanu pokazują dane osobiste). Wygląd na Poco może się nieco różnić.
+
+### Motywy w aplikacji
+
+Ten sam ekran w sześciu motywach (siódmy, Systemowy, wybiera Jasny lub Ciemny według telefonu). Material You bierze kolory z tapety telefonu.
+
+<img src="docs/screens/motywy-noc.png" alt="Ekran Noc w motywach: Ciemny, Jasny, Material You, Żar, Las, Czerń OLED">
+
+<img src="docs/screens/motywy-raport.png" alt="Raport w motywach: Ciemny, Jasny, Material You, Żar, Las, Czerń OLED">
+
+## Motywy wyglądu (makieta)
+
+> Podglądy poniżej pochodzą z makiety webowej. W aplikacji na Androida motywy są w sekcji wyżej.
+
 
 Motyw wybierasz w **Ustawienia → Wygląd**, a wybór zapamiętuje się w przeglądarce. Motywy zmieniają tylko kolory i zaokrąglenia, układ ekranów jest wszędzie ten sam.
 

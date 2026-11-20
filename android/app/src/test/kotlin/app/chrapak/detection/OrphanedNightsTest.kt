@@ -73,4 +73,24 @@ class OrphanedNightsTest {
 
         assertEquals(0, nights.rows.size)
     }
+
+    @Test
+    fun `a guessed nap with no snoring is dropped even when it was long`() = runBlocking {
+        val nap = NightEntity("nap", 0, null, tags = app.chrapak.data.NAP_TAG)
+        val nights = FakeNights(mutableListOf(nap))
+
+        finishNight(nights, FakeEvents(emptyList()), nap, endMs = 2 * 3_600_000L)
+
+        assertEquals(0, nights.rows.size)
+    }
+
+    @Test
+    fun `a nap that recorded snoring is kept`() = runBlocking {
+        val nap = NightEntity("nap", 0, null, tags = app.chrapak.data.NAP_TAG)
+        val nights = FakeNights(mutableListOf(nap))
+
+        finishNight(nights, FakeEvents(listOf(event("nap", 600_000, 20_000))), nap, endMs = 2 * 3_600_000L)
+
+        assertEquals(2 * 3_600_000L, nights.rows.single().sleepEndMs)
+    }
 }

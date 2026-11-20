@@ -16,6 +16,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,6 +57,7 @@ fun EventsScreen(
     player: ClipPlayer,
     onBack: () -> Unit,
     onChanged: () -> Unit,
+    onAnalyze: (SnoreEventEntity) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var filter by rememberSaveable { mutableStateOf(Filter.ALL) }
@@ -85,8 +87,15 @@ fun EventsScreen(
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(timeLabel(event.startMs) + if (event.starred) "  ★" else "", style = MaterialTheme.typography.titleMedium)
                         Text(eventFacts(event, health).joinToString(" · "), color = Palette.mutedForeground, style = MaterialTheme.typography.bodySmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        // Two rows: five actions in one line do not fit a phone and wrap letter by letter.
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             PlayButton(event, file, player)
+                            OutlinedButton(onClick = {
+                                player.stop()
+                                onAnalyze(event)
+                            }, enabled = file != null) { Text("Analiza") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             TextButton(onClick = { scope.launch { repo.setStarred(event, !event.starred); onChanged() } }) {
                                 Text(if (event.starred) "Odepnij" else "Zachowaj")
                             }
