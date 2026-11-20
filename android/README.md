@@ -49,10 +49,30 @@ Pokój w ciszy ma ok. −85 dB, naśladowane chrapanie średnio ok. −64 dB. Pr
 
 Room ([`Entities.kt`](app/src/main/kotlin/app/chrapak/data/Entities.kt)) odpowiada typom `Night` i `SnoreEvent` z makiety. Schemat jest eksportowany do `app/schemas/`. Klipy to pliki WAV w `files/clips/<noc>/`.
 
+## Ekrany
+
+Compose z paletą Północ z makiety: **Noc** (start i stop nasłuchu), **Raport** (wynik, statystyki, oś czasu ze snem, chrapaniem, SpO₂ i tętnem, wnioski), **Nagrania** (lista klipów z odtwarzaniem, „Zachowaj”, „Fałszywy alarm”, usuwanie) i **Ustawienia** (połączenie z Health Connect, lista aplikacji zapisujących dane i podgląd ostatnich 24 h).
+
+Wynik chrapania to udział chrapania w nocy: 30% nocy daje 100. Wniosek o REM i o SpO₂ pojawia się tylko wtedy, gdy są dane ze snu i saturacji.
+
+## Health Connect
+
+Odczyt (bez zapisu) snu, tętna i SpO₂. Sprawdzone na telefonie: RingConn zapisuje do Health Connect sesje snu z fazami, tętno i SpO₂, a opaska Xiaomi nie zapisuje nic. Ustawienia pokazują dla każdej aplikacji liczbę rekordów z ostatnich 3 dni.
+
+## Zużycie energii
+
+Pomiar czasu CPU aplikacji przy wygaszonym ekranie (telefon na ładowarce, nasłuch z klasyfikatorem):
+
+| Wersja | CPU (jeden rdzeń) |
+|---|---|
+| debug | ok. 2,9% |
+| `benchmark` (bez flagi debugowania) | ok. 1,6% w cichym pokoju |
+
+Klasyfikator wywołał się tylko kilka razy w ciągu kilku minut, więc koszt to głównie odczyt mikrofonu i bramka. Zmiana odczytu mikrofonu z 0,5 s na 1 s dała niejednoznaczny wynik (hałas w pokoju zmieniał obciążenie), więc zostaje 0,5 s. `./gradlew :app:assembleBenchmark` buduje wariant do takich pomiarów, podpisany kluczem debug.
+
 ## Czego jeszcze nie ma
 
-- **Strojenie na prawdziwych nocach.** Progi bramki i klasyfikatora opierają się na krótkich testach z naśladowanym chrapaniem.
-- **Przeliczenie dBFS na dB** pokazywane w makiecie. Wymaga kalibracji mikrofonu danego telefonu. Na razie zapisywane są dBFS pasma 100–2000 Hz.
-- **Health Connect** (fazy snu, SpO₂, tętno z pierścienia i opaski) oraz korelacja z zdarzeniami.
-- **Ekrany Compose** poza minimalnym ekranem „Noc".
-- **Pełna noc na telefonie.** Serwis, mikrofon, bramka, YAMNet, zapis klipów i zatrzymanie działają na Poco (testy kilkuminutowe, także z wygaszonym ekranem), ale nie sprawdzono jeszcze całej nocy, zużycia baterii ani zachowania HyperOS przy ograniczeniach baterii i autostarcie.
+- **Strojenie na prawdziwych nocach.** Progi bramki i klasyfikatora opierają się na krótkich testach z naśladowanym chrapaniem (kilkuminutowy nasłuch w pokoju dał zero fałszywych zdarzeń).
+- **Pełna noc na telefonie i pomiar baterii.** Nie sprawdzono zachowania HyperOS przy ograniczeniach baterii i autostarcie. Aplikacja nie jest na liście wyjątków oszczędzania baterii.
+- **Przeliczenie dBFS na dB** pokazywane w makiecie. Wymaga kalibracji mikrofonu danego telefonu.
+- **Trendy, tagi, harmonogram startu, przełącznik motywów** i pełne ustawienia detekcji z makiety.
