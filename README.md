@@ -13,7 +13,40 @@ Projekt ma dwie części:
 
 Docelowy sprzęt: telefon z Androidem (mikrofon), **RingConn Gen 2 Air** i **Xiaomi Smart Band 10** jako źródła danych o śnie przez Health Connect.
 
-## Motywy wyglądu
+## Aplikacja na Androida: zrzuty ekranu
+
+Zrzuty z telefonu (Poco z Androidem 17, motyw Ciemny). Raport i nagrania pokazują dane testowe: naśladowane chrapanie z kilkuminutowych prób, a nie prawdziwą noc.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screens/noc-nasluch.png" width="230" alt="Ekran Noc podczas nasłuchu"><br><sub>Noc: nasłuch trwa</sub></td>
+    <td align="center"><img src="docs/screens/noc-gotowosc.png" width="230" alt="Ekran Noc, czuwanie i lista kontrolna"><br><sub>Noc: czuwanie i lista kontrolna</sub></td>
+    <td align="center"><img src="docs/screens/raport.png" width="230" alt="Poranny raport"><br><sub>Raport</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screens/raport-os-czasu.png" width="230" alt="Oś czasu nocy"><br><sub>Oś czasu i wnioski</sub></td>
+    <td align="center"><img src="docs/screens/nagrania.png" width="230" alt="Lista nagrań chrapania"><br><sub>Nagrania</sub></td>
+    <td align="center"><img src="docs/screens/analiza.png" width="230" alt="Analiza nagrania"><br><sub>Analiza: rytm, przerwy, pasma</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screens/analiza-model.png" width="230" alt="Co słyszy model YAMNet"><br><sub>Analiza: co słyszy YAMNet</sub></td>
+    <td align="center"><img src="docs/screens/ustawienia.png" width="230" alt="Ustawienia automatycznego nasłuchu"><br><sub>Ustawienia: automat</sub></td>
+    <td align="center"><img src="docs/screens/ustawienia-wyglad.png" width="230" alt="Wybór motywu"><br><sub>Ustawienia: wygląd</sub></td>
+  </tr>
+</table>
+
+### Motywy w aplikacji
+
+Ten sam ekran w sześciu motywach (siódmy, Systemowy, wybiera Jasny lub Ciemny według telefonu). Material You bierze kolory z tapety telefonu.
+
+<img src="docs/screens/motywy-noc.png" alt="Ekran Noc w motywach: Ciemny, Jasny, Material You, Żar, Las, Czerń OLED">
+
+<img src="docs/screens/motywy-raport.png" alt="Raport w motywach: Ciemny, Jasny, Material You, Żar, Las, Czerń OLED">
+
+## Motywy wyglądu (makieta)
+
+> Podglądy poniżej pochodzą z makiety webowej. W aplikacji na Androida motywy są w sekcji wyżej.
+
 
 Motyw wybierasz w **Ustawienia → Wygląd**, a wybór zapamiętuje się w przeglądarce. Motywy zmieniają tylko kolory i zaokrąglenia, układ ekranów jest wszędzie ten sam.
 

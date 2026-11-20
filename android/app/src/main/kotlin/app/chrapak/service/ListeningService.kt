@@ -123,6 +123,12 @@ class ListeningService : Service() {
                 evaluateNap()
             }
             ACTION_NAP_CHECK -> evaluateNap()
+            // Debug builds only: pretend the screen has been off for the whole quiet period, so the sensor
+            // verdict, the start, the probation and the clean-up can be tested without waiting or an alarm.
+            ACTION_DEBUG_FORCE_NAP -> if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                napDetector.onScreenOff(System.currentTimeMillis() - AutoListenPrefs.napQuietMin(this) * 60_000L - 1_000L)
+                evaluateNap()
+            }
             else -> startListening(byWindow = false, maxMs = intent?.getLongExtra(EXTRA_MAX_MS, 0L) ?: 0L)
         }
         // Never restart blindly: a microphone service may only be started while the app is visible.
@@ -598,6 +604,7 @@ class ListeningService : Service() {
         const val ACTION_WINDOW_END = "app.chrapak.action.WINDOW_END"
         const val ACTION_WATCHDOG = "app.chrapak.action.WATCHDOG"
         const val ACTION_NAP_CHECK = "app.chrapak.action.NAP_CHECK"
+        const val ACTION_DEBUG_FORCE_NAP = "app.chrapak.action.DEBUG_FORCE_NAP"
         const val EXTRA_MAX_MS = "max_ms"
         /** A Quick Settings nap stops by itself after this long. */
         const val NAP_MAX_MS = 3 * 60 * 60 * 1000L

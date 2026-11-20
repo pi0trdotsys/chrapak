@@ -34,6 +34,7 @@ import app.chrapak.analysis.ClipAnalyzer
 import app.chrapak.audio.WavReader
 import app.chrapak.data.SnoreEventEntity
 import app.chrapak.detection.YamnetClassifier
+import app.chrapak.ui.classNamePl
 import app.chrapak.ui.dbLabel
 import app.chrapak.ui.decimal
 import app.chrapak.ui.durationLabel
@@ -193,7 +194,7 @@ private fun ModelCard(m: ModelView, durationMs: Long) {
                 }
             }
             Text("Najczęstsze dźwięki", style = MaterialTheme.typography.labelLarge, color = Palette.mutedForeground)
-            m.top.forEach { (label, share) -> ShareBar(label, share) }
+            m.top.forEach { (label, share) -> ShareBar(classNamePl(label), share) }
         }
     }
 }

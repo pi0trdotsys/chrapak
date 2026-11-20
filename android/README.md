@@ -69,7 +69,7 @@ Wynik chrapania to udział chrapania w nocy: 30% nocy daje 100. Wniosek o REM i 
 
 ## Motywy
 
-Ustawienia → **Wygląd**: Systemowy (jasny w dzień, ciemny w nocy), Jasny, Ciemny (domyślny), **Material You** (kolory z tapety, Android 12+), a do tego trzy motywy z makiety: Żar, Las i Czerń OLED. Jedna paleta ([`Palette.kt`](app/src/main/kotlin/app/chrapak/ui/theme/Palette.kt)) napędza cały interfejs, także wykresy na Canvasie, a kolory danych (SpO₂, głośne chrapanie) zostają stałe w Material You, żeby wykres znaczył to samo przy każdej tapecie. Podglądy motywów są w [README repozytorium](../README.md#motywy-wyglądu).
+Ustawienia → **Wygląd**: Systemowy (jasny w dzień, ciemny w nocy), Jasny, Ciemny (domyślny), **Material You** (kolory z tapety, Android 12+), a do tego trzy motywy z makiety: Żar, Las i Czerń OLED. Jedna paleta ([`Palette.kt`](app/src/main/kotlin/app/chrapak/ui/theme/Palette.kt)) napędza cały interfejs, także wykresy na Canvasie, a kolory danych (SpO₂, głośne chrapanie) zostają stałe w Material You, żeby wykres znaczył to samo przy każdej tapecie. Zrzuty ekranów i motywów z telefonu są w [README repozytorium](../README.md#aplikacja-na-androidzie-zrzuty-ekranu).
 
 ## Powiadomienia
 
@@ -100,7 +100,7 @@ Drzemkę zgaduję z tego, co widzi telefon, więc to domysł, który trzeba chro
 4. **Sprzątanie**: drzemka bez żadnego chrapania jest usuwana, więc raport nie zapełnia się pustymi wpisami.
 5. **Koniec** drzemki to pierwsze włączenie ekranu albo limit 3 godzin, a po zakończeniu detektor nie startuje od razu ponownie.
 
-Zachowanie logiki jest pokryte testami jednostkowymi. Samo uruchomienie z alarmu przy wygaszonym ekranie na telefonie nie zostało jeszcze potwierdzone w pełnym, niezakłóconym teście.
+Logika jest pokryta testami jednostkowymi. Na telefonie potwierdzono: odczyt czujników i decyzję (nie zasłonięty, leży płasko, 37 lx, ładowarka, czyli dwie oznaki), próbę dźwiękową co 15 s, zakończenie drzemki i usunięcie pustej drzemki z bazy. **Nie potwierdzono jeszcze całej ścieżki od wygaszenia ekranu przez alarm do startu**: dwie próby przerwało włączenie ekranu, więc to wymaga prawdziwej drzemki.
 
 ### HyperOS wstrzymuje bezczynne aplikacje
 
@@ -133,5 +133,4 @@ Klasyfikator wywołał się tylko kilka razy w ciągu kilku minut, więc koszt t
 - **Pełna noc na telefonie i pomiar baterii.** Nie sprawdzono zachowania HyperOS przy ograniczeniach baterii i autostarcie. Aplikacja nie jest na liście wyjątków oszczędzania baterii.
 - **Przeliczenie dBFS na dB** pokazywane w makiecie. Wymaga kalibracji mikrofonu danego telefonu.
 - **Analiza AI na własnym serwerze** (do omówienia, patrz niżej w opisie projektu).
-- **Zrzuty ekranu w README** z prawdziwego telefonu.
 - **Trendy, tagi, przełącznik motywów** i pełne ustawienia detekcji z makiety.

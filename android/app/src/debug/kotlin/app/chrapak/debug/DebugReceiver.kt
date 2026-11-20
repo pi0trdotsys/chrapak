@@ -19,6 +19,14 @@ class DebugReceiver : BroadcastReceiver() {
                 .onSuccess { app.chrapak.ui.theme.ThemeState.set(context, it) }
             return
         }
+        if (intent.action == "app.chrapak.debug.FORCE_NAP") {
+            context.startService(Intent(context, app.chrapak.service.ListeningService::class.java).setAction(app.chrapak.service.ListeningService.ACTION_DEBUG_FORCE_NAP))
+            return
+        }
+        if (intent.action == "app.chrapak.debug.STOP_LISTENING") {
+            app.chrapak.service.ListeningService.stop(context)
+            return
+        }
         if (intent.action == "app.chrapak.debug.SET_NAP") {
             AutoListenPrefs.setNapQuietMin(context, intent.getIntExtra("quiet", 15))
             Log.i("ChrapakDebug", "nap quiet time set to ${AutoListenPrefs.napQuietMin(context)} min (re-arm to apply)")
