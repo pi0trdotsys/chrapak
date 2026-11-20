@@ -18,7 +18,8 @@ const val GATE_ONLY_CONFIDENCE = 0.5f
 data class DetectionConfig(
     val gate: GateConfig = GateConfig(),
     val preRollMs: Int = 5_000,
-    val mergeGapMs: Long = 2_000,
+    /** A breath cycle is 3-5 s and snores sit inside it, so pauses up to this long keep one episode. */
+    val mergeGapMs: Long = 6_000,
     val minEventMs: Long = 3_000,
     /** Audio kept per clip beyond the pre-roll; the event's duration is still recorded in full. */
     val maxClipMs: Int = 60_000,
@@ -38,6 +39,15 @@ class DetectedEvent(
     val confidence: Float,
     val clipStartMs: Long,
     val pcm: ShortArray,
+)
+
+/** What the gate saw since the last [DetectionPipeline.takeDiagnostics]; for tuning thresholds. */
+data class GateDiagnostics(
+    val peakDb: Float,
+    val lowBandRatioAtPeak: Float,
+    val activeFrames: Int,
+    val frames: Int,
+    val noiseFloorDb: Float,
 )
 
 /**
@@ -72,6 +82,21 @@ class DetectionPipeline(
     private var scoreMax = 0f
     private var scoreCount = 0
 
+    private var diagPeak = Float.NEGATIVE_INFINITY
+    private var diagRatio = 0f
+    private var diagActive = 0
+    private var diagFrames = 0
+
+    /** Summary of the gate's view since the previous call, then resets it. */
+    fun takeDiagnostics(): GateDiagnostics {
+        val d = GateDiagnostics(diagPeak, diagRatio, diagActive, diagFrames, gate.noiseFloorDb)
+        diagPeak = Float.NEGATIVE_INFINITY
+        diagRatio = 0f
+        diagActive = 0
+        diagFrames = 0
+        return d
+    }
+
     /** How many times the second stage ran; stays at zero through quiet stretches. */
     var classifierCalls = 0
         private set
@@ -101,6 +126,12 @@ class DetectionPipeline(
         val frameStartMs = timeMs(samplesProcessed)
         val frameMs = config.gate.frameMs
         val result = gate.process(frame)
+        diagFrames++
+        if (result.active) diagActive++
+        if (result.levelDb > diagPeak) {
+            diagPeak = result.levelDb
+            diagRatio = result.lowBandRatio
+        }
         ring.write(frame)
         samplesProcessed += frameSamples
 

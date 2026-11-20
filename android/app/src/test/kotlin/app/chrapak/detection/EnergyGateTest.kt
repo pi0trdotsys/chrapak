@@ -8,8 +8,8 @@ class EnergyGateTest {
     private val config = GateConfig()
 
     /** Runs the whole signal through a fresh gate and returns the active flag of every frame. */
-    private fun activity(signal: ShortArray): List<Boolean> {
-        val gate = EnergyGate(config)
+    private fun activity(signal: ShortArray, gateConfig: GateConfig = config): List<Boolean> {
+        val gate = EnergyGate(gateConfig)
         return (0 until signal.size / config.frameSamples).map { gate.process(signal, it * config.frameSamples).active }
     }
 
@@ -29,10 +29,24 @@ class EnergyGateTest {
     }
 
     @Test
-    fun `broadband hiss is rejected by the low band check`() {
-        val flags = activity(TestSignals.concat(TestSignals.silence(5.0), TestSignals.hiss(3.0)))
+    fun `broadband hiss is rejected when the optional low band check is on`() {
+        val strict = GateConfig(minLowBandRatio = 0.4f)
+        val flags = activity(TestSignals.concat(TestSignals.silence(5.0), TestSignals.hiss(3.0)), strict)
         val activeShare = flags.drop(5 * framesPerSecond()).count { it }.toDouble() / (3 * framesPerSecond())
         assertTrue("hiss was active ${(activeShare * 100).toInt()}% of the time", activeShare < 0.05)
+    }
+
+    @Test
+    fun `low band check is off by default`() {
+        val flags = activity(TestSignals.concat(TestSignals.silence(5.0), TestSignals.hiss(3.0)))
+        assertTrue("loud hiss should pass a gate with the check off", flags.drop(5 * framesPerSecond()).count { it } > framesPerSecond())
+    }
+
+    @Test
+    fun `quiet UNPROCESSED level snoring still activates`() {
+        // About -60 dBFS in band: far below the old -62 dB floor but 25 dB above an empty room.
+        val flags = activity(TestSignals.concat(TestSignals.silence(5.0), TestSignals.snore(2.0, amplitude = 45), TestSignals.silence(2.0)))
+        assertTrue(flags.subList(5 * framesPerSecond() + 5, 7 * framesPerSecond() - 2).count { it } > framesPerSecond())
     }
 
     @Test

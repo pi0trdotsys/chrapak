@@ -14,13 +14,21 @@ data class GateConfig(
     /** Snoring lives mostly between roughly 100 Hz and 2 kHz. */
     val highPassHz: Float = 100f,
     val lowPassHz: Float = 2_000f,
-    /** Energy below this frequency must dominate the band: rejects hiss and speech sibilants. */
+    /** Frequency splitting "low" from "high" in the band, for the optional ratio check below. */
     val lowBandHz: Float = 600f,
-    val minLowBandRatio: Float = 0.4f,
+    /**
+     * Minimum share of band energy below [lowBandHz]. Off by default: measured on a phone, imitated
+     * snoring scores 0.15-0.4, no better than broadband noise (about 0.28), because first-order
+     * filters are too gentle to separate them. Telling snoring from noise is the classifier's job.
+     */
+    val minLowBandRatio: Float = 0f,
     /** How far above the room's noise floor a frame must be to count as active. */
     val marginDb: Float = 8f,
-    /** Never activate below this absolute level (dBFS), whatever the floor says. */
-    val absoluteMinDb: Float = -62f,
+    /**
+     * Never activate below this absolute level (dBFS), whatever the floor says. The UNPROCESSED
+     * microphone is quiet: an empty room sits around -85 dB and imitated snoring peaks near -50 dB.
+     */
+    val absoluteMinDb: Float = -75f,
     /** Frames spent learning the room's silence before any frame can be active. */
     val warmupFrames: Int = 40,
     /** Floor follows a quieter room quickly... */
@@ -31,7 +39,7 @@ data class GateConfig(
     val frameSamples: Int get() = sampleRate * frameMs / 1000
 }
 
-data class GateResult(val levelDb: Float, val active: Boolean)
+data class GateResult(val levelDb: Float, val active: Boolean, val lowBandRatio: Float)
 
 /** Adaptive band-energy gate. Feed it exactly [GateConfig.frameSamples] samples at a time. */
 class EnergyGate(private val config: GateConfig = GateConfig()) {
@@ -67,7 +75,7 @@ class EnergyGate(private val config: GateConfig = GateConfig()) {
 
         if (frames <= config.warmupFrames) {
             floorDb = if (frames == 1) levelDb else floorDb + 0.1f * (levelDb - floorDb)
-            return GateResult(levelDb, active = false)
+            return GateResult(levelDb, active = false, lowBandRatio = ratio)
         }
 
         val active = levelDb > floorDb + config.marginDb &&
@@ -75,7 +83,7 @@ class EnergyGate(private val config: GateConfig = GateConfig()) {
             ratio >= config.minLowBandRatio
         val rate = if (levelDb < floorDb) config.floorFallRate else config.floorRiseRate
         floorDb += rate * (levelDb - floorDb)
-        return GateResult(levelDb, active)
+        return GateResult(levelDb, active, ratio)
     }
 
     private fun onePoleAlpha(cutoffHz: Float): Float {

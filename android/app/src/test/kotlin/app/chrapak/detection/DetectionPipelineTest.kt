@@ -69,8 +69,9 @@ class DetectionPipelineTest {
         val (events, pipeline) = run(classifier(0.9f))
         assertEquals(1, events.size)
         assertEquals(0.9f, events[0].confidence, 0.0001f)
-        // About one call per second of a 6.5 s episode, never during the 10 s and 6 s of quiet.
-        assertTrue("calls: ${pipeline.classifierCalls}", pipeline.classifierCalls in 3..8)
+        // About one call per second while the episode is open (6.5 s of snoring plus the 6 s merge
+        // gap before it closes), and none during the 10 s of quiet before it.
+        assertTrue("calls: ${pipeline.classifierCalls}", pipeline.classifierCalls in 3..14)
     }
 
     @Test
