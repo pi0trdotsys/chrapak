@@ -10,6 +10,8 @@ data class ListeningStatus(
     val eventCount: Int = 0,
     /** Latest band level in dBFS, for a calm "I can hear you" indicator. Null when idle. */
     val levelDb: Float? = null,
+    /** False when the YAMNet model is missing and events are accepted on the gate alone. */
+    val classifierActive: Boolean = false,
     val error: String? = null,
 )
 

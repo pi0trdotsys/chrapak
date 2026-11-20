@@ -7,12 +7,16 @@ data class SnoreSegment(val startMs: Long, val endMs: Long, val peakDb: Float, v
 /**
  * Turns per-frame "active" flags into snoring episodes. Snores come in breath cycles with short
  * pauses, so activity separated by less than [mergeGapMs] belongs to one episode. Episodes
- * shorter than [minEventMs] are dropped.
+ * shorter than [minEventMs] are dropped, and so are sparse ones: a handful of noise frames spread
+ * over a long stretch must not pass as snoring, so the frames actually active must add up to at
+ * least [minActiveMs].
  */
 class SnoreSegmenter(
     private val mergeGapMs: Long = 2_000,
     private val minEventMs: Long = 3_000,
+    private val minActiveMs: Long = 0,
 ) {
+    private var frameMs = 0
     private var startMs = -1L
     private var lastActiveEndMs = 0L
     private var peakDb = Float.NEGATIVE_INFINITY
@@ -23,6 +27,7 @@ class SnoreSegmenter(
 
     /** Returns a finished episode when this frame closes one, otherwise null. */
     fun onFrame(frameStartMs: Long, frameMs: Int, active: Boolean, levelDb: Float): SnoreSegment? {
+        this.frameMs = frameMs
         if (active) {
             if (!isOpen) startMs = frameStartMs
             lastActiveEndMs = frameStartMs + frameMs
@@ -40,10 +45,11 @@ class SnoreSegmenter(
 
     private fun close(): SnoreSegment? {
         val segment = SnoreSegment(startMs, lastActiveEndMs, peakDb, (sumDb / activeFrames).toFloat())
+        val activeMs = activeFrames.toLong() * frameMs
         startMs = -1L
         peakDb = Float.NEGATIVE_INFINITY
         sumDb = 0.0
         activeFrames = 0
-        return if (segment.durationMs >= minEventMs) segment else null
+        return if (segment.durationMs >= minEventMs && activeMs >= minActiveMs) segment else null
     }
 }

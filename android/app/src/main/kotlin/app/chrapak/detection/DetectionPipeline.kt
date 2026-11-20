@@ -18,12 +18,21 @@ const val GATE_ONLY_CONFIDENCE = 0.5f
 data class DetectionConfig(
     val gate: GateConfig = GateConfig(),
     val preRollMs: Int = 5_000,
-    val mergeGapMs: Long = 2_000,
+    /** A breath cycle is 3-5 s and snores sit inside it, so pauses up to this long keep one episode. */
+    val mergeGapMs: Long = 6_000,
     val minEventMs: Long = 3_000,
+    /** Frames actually active must add up to this much, so sparse noise does not become an episode. */
+    val minActiveMs: Long = 1_500,
     /** Audio kept per clip beyond the pre-roll; the event's duration is still recorded in full. */
     val maxClipMs: Int = 60_000,
     val classifyEveryMs: Long = 1_000,
-    val minConfidence: Float = 0.5f,
+    /**
+     * Highest "Snoring" probability over an episode must reach this. Measured with YAMNet on a
+     * phone: imitated snoring reached 0.74, while silence, speech and claps stayed at or below
+     * 0.02. A low bar costs a few false events in the morning list; a high one would miss real
+     * snoring, which is the worse mistake. Tune it on real nights.
+     */
+    val minConfidence: Float = 0.3f,
 )
 
 /**
@@ -40,6 +49,15 @@ class DetectedEvent(
     val pcm: ShortArray,
 )
 
+/** What the gate saw since the last [DetectionPipeline.takeDiagnostics]; for tuning thresholds. */
+data class GateDiagnostics(
+    val peakDb: Float,
+    val lowBandRatioAtPeak: Float,
+    val activeFrames: Int,
+    val frames: Int,
+    val noiseFloorDb: Float,
+)
+
 /**
  * Audio in, snoring events out: cheap gate on every frame, optional classifier only while an
  * episode is open, clip audio kept in memory and handed over once the episode ends.
@@ -52,7 +70,7 @@ class DetectionPipeline(
     private val onEvent: (DetectedEvent) -> Unit,
 ) {
     private val gate = EnergyGate(config.gate)
-    private val segmenter = SnoreSegmenter(config.mergeGapMs, config.minEventMs)
+    private val segmenter = SnoreSegmenter(config.mergeGapMs, config.minEventMs, config.minActiveMs)
     private val sampleRate = config.gate.sampleRate
     private val frameSamples = config.gate.frameSamples
     private val frame = ShortArray(frameSamples)
@@ -71,6 +89,21 @@ class DetectionPipeline(
     private var lastClassifyMs = 0L
     private var scoreMax = 0f
     private var scoreCount = 0
+
+    private var diagPeak = Float.NEGATIVE_INFINITY
+    private var diagRatio = 0f
+    private var diagActive = 0
+    private var diagFrames = 0
+
+    /** Summary of the gate's view since the previous call, then resets it. */
+    fun takeDiagnostics(): GateDiagnostics {
+        val d = GateDiagnostics(diagPeak, diagRatio, diagActive, diagFrames, gate.noiseFloorDb)
+        diagPeak = Float.NEGATIVE_INFINITY
+        diagRatio = 0f
+        diagActive = 0
+        diagFrames = 0
+        return d
+    }
 
     /** How many times the second stage ran; stays at zero through quiet stretches. */
     var classifierCalls = 0
@@ -101,6 +134,12 @@ class DetectionPipeline(
         val frameStartMs = timeMs(samplesProcessed)
         val frameMs = config.gate.frameMs
         val result = gate.process(frame)
+        diagFrames++
+        if (result.active) diagActive++
+        if (result.levelDb > diagPeak) {
+            diagPeak = result.levelDb
+            diagRatio = result.lowBandRatio
+        }
         ring.write(frame)
         samplesProcessed += frameSamples
 

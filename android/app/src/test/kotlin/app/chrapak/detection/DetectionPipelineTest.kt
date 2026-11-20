@@ -69,8 +69,9 @@ class DetectionPipelineTest {
         val (events, pipeline) = run(classifier(0.9f))
         assertEquals(1, events.size)
         assertEquals(0.9f, events[0].confidence, 0.0001f)
-        // About one call per second of a 6.5 s episode, never during the 10 s and 6 s of quiet.
-        assertTrue("calls: ${pipeline.classifierCalls}", pipeline.classifierCalls in 3..8)
+        // About one call per second while the episode is open (6.5 s of snoring plus the 6 s merge
+        // gap before it closes), and none during the 10 s of quiet before it.
+        assertTrue("calls: ${pipeline.classifierCalls}", pipeline.classifierCalls in 3..14)
     }
 
     @Test
@@ -78,6 +79,16 @@ class DetectionPipelineTest {
         val (events, pipeline) = run(classifier(0.1f))
         assertEquals(0, events.size)
         assertTrue(pipeline.classifierCalls > 0)
+    }
+
+    @Test
+    fun `sparse clicks over many seconds are not an episode`() {
+        // A 0.1 s loud tick every 3 s for 30 s: lots of span, hardly any active time.
+        val tick = TestSignals.snore(0.1)
+        val gap = TestSignals.silence(2.9, seed = 9)
+        val parts = (0 until 10).flatMap { listOf(tick, gap) }
+        val (events, _) = run(classifier = null, signal = TestSignals.concat(TestSignals.silence(3.0), *parts.toTypedArray(), TestSignals.silence(8.0)))
+        assertEquals(0, events.size)
     }
 
     @Test

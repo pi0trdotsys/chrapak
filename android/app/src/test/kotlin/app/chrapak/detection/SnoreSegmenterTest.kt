@@ -50,6 +50,21 @@ class SnoreSegmenterTest {
     }
 
     @Test
+    fun `sparse activity spread over a long time is dropped`() {
+        val segmenter = SnoreSegmenter(mergeGapMs = 6_000, minEventMs = 3_000, minActiveMs = 1_500)
+        // One active frame every 3 s for 21 s: it spans well over 3 s but only 0.8 s is active.
+        val pattern = (0 until 8).joinToString("") { "A" + ".".repeat(29) }
+        assertEquals(0, run(segmenter, pattern + ".".repeat(80)).size)
+    }
+
+    @Test
+    fun `dense activity of the same span is kept`() {
+        val segmenter = SnoreSegmenter(mergeGapMs = 6_000, minEventMs = 3_000, minActiveMs = 1_500)
+        val pattern = (0 until 8).joinToString("") { "A".repeat(10) + ".".repeat(20) }
+        assertEquals(1, run(segmenter, pattern + ".".repeat(80)).size)
+    }
+
+    @Test
     fun `peak and average levels are reported`() {
         val segmenter = SnoreSegmenter(mergeGapMs = 2_000, minEventMs = 100)
         segmenter.onFrame(0, frameMs, true, -40f)

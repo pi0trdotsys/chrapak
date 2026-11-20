@@ -20,6 +20,13 @@ android {
         release {
             isMinifyEnabled = false
         }
+        // Release-like build signed with the debug key, only for measuring CPU and battery on a phone.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            isDebuggable = false
+        }
     }
 
     compileOptions {
@@ -53,6 +60,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.litert)
+    implementation(libs.androidx.health.connect)
 
     testImplementation(libs.junit)
 }

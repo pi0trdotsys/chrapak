@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
@@ -19,14 +20,18 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import app.chrapak.R
 import app.chrapak.audio.WavWriter
 import app.chrapak.data.ChrapakDatabase
 import app.chrapak.data.NightEntity
+import app.chrapak.data.closeOrphanedNights
+import app.chrapak.data.finishNight
 import app.chrapak.data.SnoreEventEntity
 import app.chrapak.detection.DetectedEvent
 import app.chrapak.detection.DetectionConfig
 import app.chrapak.detection.DetectionPipeline
+import app.chrapak.detection.YamnetClassifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -110,7 +115,9 @@ class ListeningService : Service() {
         val sampleRate = config.gate.sampleRate
         val nightId = UUID.randomUUID().toString()
         val startMs = System.currentTimeMillis()
-        db.nights().insert(NightEntity(id = nightId, sleepStartMs = startMs, sleepEndMs = null))
+        closeOrphanedNights(db.nights(), db.events())
+        val night = NightEntity(id = nightId, sleepStartMs = startMs, sleepEndMs = null)
+        db.nights().insert(night)
 
         val events = Channel<DetectedEvent>(Channel.UNLIMITED)
         val writer = launch(Dispatchers.IO) {
@@ -134,17 +141,29 @@ class ListeningService : Service() {
             }
         }
 
-        val pipeline = DetectionPipeline(config, classifier = null, startEpochMs = startMs) { events.trySend(it) }
+        val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        val classifier = YamnetClassifier.load(applicationContext, logTopClasses = debuggable)
+        ListeningState.update { it.copy(classifierActive = classifier != null) }
+        val pipeline = DetectionPipeline(config, classifier, startEpochMs = startMs) { events.trySend(it) }
         val record = createAudioRecord(sampleRate)
         try {
             record.startRecording()
-            val chunk = ShortArray(sampleRate / 2) // 0.5 s per read: few wake-ups, low CPU
+            val chunk = ShortArray(sampleRate * READ_CHUNK_MS / 1000) // one read per chunk: fewer wake-ups, lower CPU
             var lastUiUpdate = 0L
             while (!stopRequested && isActive) {
                 val read = record.read(chunk, 0, chunk.size)
                 if (read < 0) error("Odczyt z mikrofonu nie powiódł się (kod $read).")
                 if (read == 0) continue
                 pipeline.feed(chunk, read)
+                if (debuggable) {
+                    val d = pipeline.takeDiagnostics()
+                    Log.d(
+                        TAG,
+                        "peak=%.1f dB ratio=%.2f active=%d/%d floor=%.1f dB".format(
+                            d.peakDb, d.lowBandRatioAtPeak, d.activeFrames, d.frames, d.noiseFloorDb,
+                        ),
+                    )
+                }
                 val now = System.currentTimeMillis()
                 if (now - lastUiUpdate >= UI_UPDATE_MS) {
                     lastUiUpdate = now
@@ -154,11 +173,12 @@ class ListeningService : Service() {
         } finally {
             record.stop()
             record.release()
+            classifier?.close()
             withContext(NonCancellable) {
                 pipeline.finish()
                 events.close()
                 writer.join()
-                db.nights().finish(nightId, System.currentTimeMillis())
+                finishNight(db.nights(), db.events(), night, System.currentTimeMillis())
             }
         }
     }
@@ -236,11 +256,13 @@ class ListeningService : Service() {
     }
 
     companion object {
+        private const val TAG = "ChrapakGate"
         const val ACTION_START = "app.chrapak.action.START"
         const val ACTION_STOP = "app.chrapak.action.STOP"
         private const val CHANNEL_ID = "listening"
         private const val NOTIFICATION_ID = 1
         private const val UI_UPDATE_MS = 1_000L
+        private const val READ_CHUNK_MS = 500
         private const val WAKE_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000L
 
         fun start(context: Context) {
