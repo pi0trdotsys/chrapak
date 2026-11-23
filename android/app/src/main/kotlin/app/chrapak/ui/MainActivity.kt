@@ -1,18 +1,23 @@
 package app.chrapak.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.chrapak.data.ChrapakDatabase
 import app.chrapak.data.NightRepository
+import app.chrapak.export.ClipExporter
 import app.chrapak.health.HealthConnectSource
 import app.chrapak.schedule.AutoListenPrefs
 import app.chrapak.service.ListeningService
@@ -44,9 +49,16 @@ class MainActivity : ComponentActivity() {
         val health = HealthConnectSource(applicationContext)
         val repo = NightRepository(applicationContext, ChrapakDatabase.get(applicationContext), health)
         setContent {
+            val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("audio/wav")) { uri ->
+                uri?.let {
+                    // The actual export happens in AppRoot via onExport callback
+                    // This launcher is just for showing the document picker
+                    android.util.Log.i("MainActivity", "export intent result: $uri")
+                }
+            }
             ChrapakTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppRoot(repo, health, openReport)
+                    AppRoot(repo, health, openReport, exporter)
                 }
             }
         }

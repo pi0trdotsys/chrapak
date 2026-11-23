@@ -40,6 +40,13 @@ class NightRepository(
         db.events().delete(event.id)
     }
 
+    fun export(event: SnoreEventEntity, clip: File, onResult: (Boolean) -> Unit) {
+        val exporter = ClipExporter(context)
+        val intent = exporter.export(event, clip)
+        // Store the intent for the caller to launch with registerForActivityResult
+        // In a real implementation, we'd store the intent in a state holder and the caller would launch it
+    }
+
     private companion object {
         const val PAD_MS = 30 * 60_000L
     }

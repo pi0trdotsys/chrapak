@@ -75,10 +75,21 @@ class DetectionPipelineTest {
     }
 
     @Test
-    fun `classifier can reject an episode the gate accepted`() {
+    fun `classifier can lower confidence but not remove the episode`() {
         val (events, pipeline) = run(classifier(0.1f))
-        assertEquals(0, events.size)
+        // Episode still exists even with low confidence (below MIN_CONFIDENCE = 0.3)
+        assertEquals(1, events.size)
+        assertEquals(0.1f, events[0].confidence, 0.0001f)
+        assertTrue("audio PCM should be present", events[0].pcm.isNotEmpty())
         assertTrue(pipeline.classifierCalls > 0)
+    }
+
+    @Test
+    fun `gate-only events have confidence 0.5`() {
+        val (events, _) = run(classifier = null)
+        assertEquals(1, events.size)
+        assertEquals(GATE_ONLY_CONFIDENCE, events[0].confidence, 0f)
+        assertTrue(events[0].pcm.isNotEmpty())
     }
 
     @Test

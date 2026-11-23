@@ -35,14 +35,12 @@ data class DetectionConfig(
     /** Audio kept per clip beyond the pre-roll; the event's duration is still recorded in full. */
     val maxClipMs: Int = 60_000,
     val classifyEveryMs: Long = 1_000,
-    /**
-     * Highest "Snoring" probability over an episode must reach this. Measured with YAMNet on a
-     * phone: imitated snoring reached 0.74, while silence, speech and claps stayed at or below
-     * 0.02. A low bar costs a few false events in the morning list; a high one would miss real
-     * snoring, which is the worse mistake. Tune it on real nights.
-     */
-    val minConfidence: Float = 0.3f,
-)
+) {
+    companion object {
+        /** Minimum confidence to show as „pewne” in the UI. Does not affect whether an episode is saved. */
+        const val MIN_CONFIDENCE = 0.3f
+    }
+}
 
 /**
  * One snoring episode with the audio around it. Levels are dBFS of the 100-2000 Hz band; mapping
@@ -200,19 +198,19 @@ class DetectionPipeline(
                 scoreCount == 0 -> 0f
                 else -> scoreMax
             }
-            if (classifier == null || confidence >= config.minConfidence) {
-                onEvent(
-                    DetectedEvent(
-                        startMs = segment.startMs,
-                        durationMs = segment.durationMs,
-                        peakDb = segment.peakDb,
-                        avgDb = segment.avgDb,
-                        confidence = confidence,
-                        clipStartMs = clipStartMs,
-                        pcm = clip.copyOf(clipSize),
-                    ),
-                )
-            }
+            // Emitted episode always has PCM + metadata; confidence is just metadata.
+            // Classifier can lower confidence, but not remove the episode or its audio.
+            onEvent(
+                DetectedEvent(
+                    startMs = segment.startMs,
+                    durationMs = segment.durationMs,
+                    peakDb = segment.peakDb,
+                    avgDb = segment.avgDb,
+                    confidence = confidence,
+                    clipStartMs = clipStartMs,
+                    pcm = clip.copyOf(clipSize),
+                ),
+            )
         }
         clip = ShortArray(0)
         clipSize = 0

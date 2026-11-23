@@ -6,6 +6,7 @@ import app.chrapak.health.SleepStageType
 import app.chrapak.health.StageSegment
 import app.chrapak.health.VitalPoint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -37,10 +38,10 @@ class NightReportTest {
 
     @Test
     fun `labels follow the prototype thresholds`() {
-        assertEquals("Lekkie", NightReport.scoreLabel(39))
-        assertEquals("Umiarkowane", NightReport.scoreLabel(40))
-        assertEquals("Umiarkowane", NightReport.scoreLabel(69))
-        assertEquals("Silne", NightReport.scoreLabel(70))
+        assertEquals("Lekkie", NightReport.scoreLabel(39, tooShort = false))
+        assertEquals("Umiarkowane", NightReport.scoreLabel(40, tooShort = false))
+        assertEquals("Umiarkowane", NightReport.scoreLabel(69, tooShort = false))
+        assertEquals("Silne", NightReport.scoreLabel(70, tooShort = false))
     }
 
     @Test
@@ -52,6 +53,23 @@ class NightReportTest {
         val empty = NightReport.stats(open, emptyList())
         assertTrue(empty.nightMs >= 1)
         assertNull(empty.peakDb)
+    }
+
+    @Test
+    fun `a night shorter than 30 minutes has score 0`() {
+        val open = NightEntity("n", sleepStartMs = 0, sleepEndMs = null)
+        val stats = NightReport.stats(open, listOf(event(0, 5)), nowMs = 25 * 60_000L)
+        assertTrue(stats.tooShort)
+        assertEquals(0, stats.score)
+        assertEquals("Za krótka", NightReport.scoreLabel(stats.score, stats.tooShort))
+    }
+
+    @Test
+    fun `a night 30+ minutes gets a normal score even if open`() {
+        val open = NightEntity("n", sleepStartMs = 0, sleepEndMs = null)
+        val stats = NightReport.stats(open, listOf(event(0, 10)), nowMs = 35 * 60_000L)
+        assertFalse(stats.tooShort)
+        assertTrue(stats.score > 0)
     }
 
     private val stages = listOf(

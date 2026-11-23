@@ -39,8 +39,11 @@ import app.chrapak.data.SnoreEventEntity
 import app.chrapak.detection.DetectedEvent
 import app.chrapak.detection.DetectionConfig
 import app.chrapak.detection.DetectionPipeline
+import app.chrapak.detection.DetectionPrefs
+import app.chrapak.detection.RoomCalibrator
 import app.chrapak.detection.SnoreClassifier
 import app.chrapak.detection.YamnetClassifier
+import app.chrapak.detection.configFor
 import app.chrapak.schedule.AutoListenNotifier
 import app.chrapak.schedule.AutoListenPrefs
 import app.chrapak.schedule.AutoListenScheduler
@@ -55,6 +58,7 @@ import app.chrapak.schedule.SummaryNotifier
 import app.chrapak.ui.MainActivity
 import app.chrapak.ui.timeLabel
 import app.chrapak.widget.StatusWidget
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CoroutineScope
@@ -425,13 +429,14 @@ class ListeningService : Service() {
     @SuppressLint("MissingPermission") // checked in startListening()
     private suspend fun capture() = coroutineScope {
         val db = ChrapakDatabase.get(applicationContext)
-        val config = DetectionConfig()
+        val sensitivity = DetectionPrefs.sensitivity(this@ListeningService)
+        val calibratedFloor = DetectionPrefs.calibratedFloorDb(this@ListeningService)
+        val config = configFor(sensitivity, calibratedFloor)
         val sampleRate = config.gate.sampleRate
         val nightId = UUID.randomUUID().toString()
         val startMs = System.currentTimeMillis()
         closeOrphanedNights(db.nights(), db.events())
         val night = NightEntity(id = nightId, sleepStartMs = startMs, sleepEndMs = null, tags = if (startedByNap) NAP_TAG else "")
-        db.nights().insert(night)
 
         val events = Channel<DetectedEvent>(Channel.UNLIMITED)
         val writer = launch(Dispatchers.IO) {
@@ -459,72 +464,124 @@ class ListeningService : Service() {
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val classifier = YamnetClassifier.load(applicationContext, logTopClasses = debuggable)
         ListeningState.update { it.copy(classifierActive = classifier != null) }
-        val pipeline = DetectionPipeline(config, classifier, startEpochMs = startMs) { events.trySend(it) }
-        val record = createAudioRecord(sampleRate)
-        try {
-            record.startRecording()
-            val chunk = ShortArray(sampleRate * READ_CHUNK_MS / 1000) // one read per chunk: fewer wake-ups, lower CPU
-            var lastUiUpdate = 0L
-            while (!stopRequested && isActive && !pastAutoStop() && !windowEnded()) {
-                val read = record.read(chunk, 0, chunk.size)
-                if (read < 0) error("Odczyt z mikrofonu nie powiódł się (kod $read).")
-                if (read == 0) continue
-                pipeline.feed(chunk, read)
-                if (startedByNap) probeNap(pipeline, classifier)
-                if (debuggable) {
-                    val d = pipeline.takeDiagnostics()
-                    Log.d(
-                        TAG,
-                        "peak=%.1f dB ratio=%.2f active=%d/%d floor=%.1f dB".format(
-                            d.peakDb, d.lowBandRatioAtPeak, d.activeFrames, d.frames, d.noiseFloorDb,
-                        ),
-                    )
-                }
-                val now = System.currentTimeMillis()
-                if (now - lastUiUpdate >= UI_UPDATE_MS) {
-                    lastUiUpdate = now
-                    ListeningState.update { it.copy(levelDb = rmsDb(chunk, read)) }
-                }
-                if (now - lastNotifyAtMs >= NOTIFICATION_REFRESH_MS) {
-                    lastNotifyAtMs = now
-                    refreshNotification()
-                    StatusWidget.refresh(applicationContext)
-                }
+        val pipeline = DetectionPipeline(config, classifier, startEpochMs = startMs) { event ->
+            if (debuggable) {
+                Log.d(TAG, "episode: ${event.startMs} ${event.durationMs}ms peak=${event.peakDb}dB conf=${event.confidence}")
             }
-        } finally {
-            record.stop()
-            record.release()
-            classifier?.close()
-            withContext(NonCancellable) {
-                pipeline.finish()
-                events.close()
-                writer.join()
-                finishNight(db.nights(), db.events(), night, System.currentTimeMillis())
-                postSummary(db, night)
+            events.trySend(event)
+        }
+
+        var retryCount = 0
+        var micSource: String? = null
+        var record: AudioRecord? = null
+
+        while (!stopRequested && isActive) {
+            try {
+                record?.let {
+                    if (it.state != AudioRecord.STATE_INITIALIZED) {
+                        it.release()
+                        record = null
+                    }
+                }
+                if (record == null) {
+                    val (rec, source) = createAudioRecord(sampleRate)
+                    record = rec
+                    micSource = source
+                    ListeningState.update { it.copy(micSource = micSource) }
+                    record.startRecording()
+                    Log.i(TAG, "microphone started: $micSource")
+                }
+
+                val chunk = ShortArray(sampleRate * READ_CHUNK_MS / 1000)
+                var lastUiUpdate = 0L
+                while (!stopRequested && isActive && !pastAutoStop() && !windowEnded()) {
+                    val read = record?.read(chunk, 0, chunk.size) ?: 0
+                    when {
+                        read < 0 -> {
+                            Log.w(TAG, "read error $read, will recreate")
+                            record?.stop()
+                            record?.release()
+                            record = null
+                            retryCount++
+                            if (retryCount > 5) error("Zbyt wiele błędów odczytu mikrofonu.")
+                            delay(200)
+                            continue
+                        }
+                        read == 0 -> {
+                            delay(30)
+                            continue
+                        }
+                        else -> retryCount = 0
+                    }
+                    pipeline.feed(chunk, read)
+                    if (startedByNap) probeNap(pipeline, classifier)
+                    if (debuggable) {
+                        val d = pipeline.takeDiagnostics()
+                        Log.d(
+                            TAG,
+                            "peak=%.1f dB ratio=%.2f active=%d/%d floor=%.1f dB".format(
+                                d.peakDb, d.lowBandRatioAtPeak, d.activeFrames, d.frames, d.noiseFloorDb,
+                            ),
+                        )
+                    }
+                    val now = System.currentTimeMillis()
+                    if (now - lastUiUpdate >= UI_UPDATE_MS) {
+                        lastUiUpdate = now
+                        ListeningState.update { it.copy(levelDb = rmsDb(chunk, read)) }
+                    }
+                    if (now - lastNotifyAtMs >= NOTIFICATION_REFRESH_MS) {
+                        lastNotifyAtMs = now
+                        refreshNotification()
+                        StatusWidget.refresh(applicationContext)
+                    }
+                }
+                break
+            } catch (e: Exception) {
+                Log.e(TAG, "capture error: ${e.message}")
+                throw e
+            } finally {
+                record?.stop()
+                record?.release()
             }
+        }
+
+        classifier?.close()
+        withContext(NonCancellable) {
+            pipeline.finish()
+            events.close()
+            writer.join()
+            db.nights().insert(night)
+            finishNight(db.nights(), db.events(), night, System.currentTimeMillis())
+            postSummary(db, night)
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun createAudioRecord(sampleRate: Int): AudioRecord {
+    private fun createAudioRecord(sampleRate: Int): Pair<AudioRecord, String> {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        // UNPROCESSED skips automatic gain control, which would flatten the snore dynamics.
-        val source = if (audioManager.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true") {
-            MediaRecorder.AudioSource.UNPROCESSED
-        } else {
-            MediaRecorder.AudioSource.MIC
-        }
-        val minBytes = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        val bufferBytes = maxOf(minBytes, sampleRate * 2 * 4) // 4 s of slack for the reader
-        val record = AudioRecord(
-            source,
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferBytes,
+
+        val sources = listOf(
+            android.media.MediaRecorder.AudioSource.UNPROCESSED to "UNPROCESSED",
+            android.media.MediaRecorder.AudioSource.MIC to "MIC",
+            android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION to "VOICE_RECOGNITION",
         )
-        check(record.state == AudioRecord.STATE_INITIALIZED) { "Nie udało się zainicjować mikrofonu." }
-        return record
+
+        for ((src, name) in sources) {
+            val record = AudioRecord(
+                src,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                sampleRate * 2 * 4,
+            )
+            if (record.state == AudioRecord.STATE_INITIALIZED) {
+                Log.i(TAG, "using microphone source: $name")
+                return Pair(record, name)
+            }
+            record.release()
+        }
+        Log.w(TAG, "no working microphone source found")
+        error("Nie udało się zainicjować mikrofonu.")
     }
 
     private fun rmsDb(samples: ShortArray, length: Int): Float {
@@ -533,7 +590,7 @@ class ListeningService : Service() {
             val x = samples[i] / 32768.0
             sum += x * x
         }
-        return (20.0 * log10(sqrt(sum / length) + 1e-9)).toFloat()
+        return (20.0 * log10(sqrt(sum / length).coerceAtLeast(1e-9))).toFloat()
     }
 
     /**

@@ -17,6 +17,8 @@ data class ListeningStatus(
     /** False when the YAMNet model is missing and events are accepted on the gate alone. */
     val classifierActive: Boolean = false,
     val error: String? = null,
+    /** Microphone source in use (UNPROCESSED, MIC, VOICE_RECOGNITION), for diagnostics. */
+    val micSource: String? = null,
 )
 
 /** Process-wide view of the service for the UI. The service writes, the UI only reads. */

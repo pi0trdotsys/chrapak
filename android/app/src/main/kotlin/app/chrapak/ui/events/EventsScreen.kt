@@ -30,10 +30,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.chrapak.data.NightRepository
 import app.chrapak.data.SnoreEventEntity
+import app.chrapak.export.ClipExporter
 import app.chrapak.health.NightHealth
 import app.chrapak.ui.theme.Palette
 import app.chrapak.ui.timeLabel
 import kotlinx.coroutines.launch
+import java.io.File
 
 private enum class Filter(val label: String) {
     ALL("Wszystkie"),
@@ -58,6 +60,7 @@ fun EventsScreen(
     onBack: () -> Unit,
     onChanged: () -> Unit,
     onAnalyze: (SnoreEventEntity) -> Unit,
+    onExport: (SnoreEventEntity) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var filter by rememberSaveable { mutableStateOf(Filter.ALL) }
@@ -99,6 +102,7 @@ fun EventsScreen(
                             TextButton(onClick = { scope.launch { repo.setStarred(event, !event.starred); onChanged() } }) {
                                 Text(if (event.starred) "Odepnij" else "Zachowaj")
                             }
+                            TextButton(onClick = { onExport(event) }) { Text("Eksportuj") }
                             TextButton(onClick = { scope.launch { repo.setFalsePositive(event, !event.falsePositive); onChanged() } }) {
                                 Text(if (event.falsePositive) "To chrapanie" else "Fałszywy")
                             }

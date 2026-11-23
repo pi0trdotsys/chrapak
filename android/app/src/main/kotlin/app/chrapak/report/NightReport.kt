@@ -19,6 +19,7 @@ data class NightStats(
     val peakDb: Float?,
     val longest: SnoreEventEntity?,
     val score: Int,
+    val tooShort: Boolean = false,
 ) {
     val snoringMinutes: Int get() = (snoringMs / 60_000.0).roundToInt()
 }
@@ -29,13 +30,18 @@ object NightReport {
 
     fun valid(events: List<SnoreEventEntity>) = events.filter { !it.falsePositive }
 
-    fun stats(night: NightEntity, events: List<SnoreEventEntity>): NightStats {
+    fun stats(night: NightEntity, events: List<SnoreEventEntity>, nowMs: Long = System.currentTimeMillis()): NightStats {
         val valid = valid(events)
         val lastEventEnd = valid.maxOfOrNull { it.startMs + it.durationMs } ?: night.sleepStartMs
-        val end = night.sleepEndMs ?: lastEventEnd
+        val end = night.sleepEndMs ?: max(lastEventEnd, nowMs)
         val nightMs = max(1L, max(end, lastEventEnd) - night.sleepStartMs)
+
+        // Minimum 30 minutes to have a meaningful score
+        val tooShort = night.sleepEndMs == null && nightMs < 30 * 60_000L
+
         val snoringMs = min(nightMs, valid.sumOf { it.durationMs })
         val share = snoringMs.toDouble() / nightMs
+
         return NightStats(
             nightMs = nightMs,
             snoringMs = snoringMs,
@@ -43,11 +49,13 @@ object NightReport {
             count = valid.size,
             peakDb = valid.maxOfOrNull { it.peakDb },
             longest = valid.maxByOrNull { it.durationMs },
-            score = min(100, (share / FULL_SCORE_SHARE * 100).roundToInt()),
+            score = if (tooShort) 0 else min(100, (share / FULL_SCORE_SHARE * 100).roundToInt()),
+            tooShort = tooShort,
         )
     }
 
-    fun scoreLabel(score: Int) = when {
+    fun scoreLabel(score: Int, tooShort: Boolean) = when {
+        tooShort -> "Za krótka"
         score < 40 -> "Lekkie"
         score < 70 -> "Umiarkowane"
         else -> "Silne"

@@ -22,22 +22,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.chrapak.data.NightRepository
+import app.chrapak.data.RecordingsViewModel
 import app.chrapak.data.SnoreEventEntity
 import app.chrapak.health.HealthConnectSource
 import app.chrapak.health.NightHealth
 import app.chrapak.ui.events.ClipPlayer
 import app.chrapak.ui.events.ClipAnalysisScreen
 import app.chrapak.ui.events.EventsScreen
+import app.chrapak.ui.recordings.RecordingsScreen
 import app.chrapak.ui.report.ReportScreen
 import app.chrapak.ui.settings.SettingsScreen
 import app.chrapak.ui.theme.Palette
 
-private enum class Tab(val label: String) { NOC("Noc"), RAPORT("Raport"), USTAWIENIA("Ustawienia") }
+private enum class Tab(val label: String) { NOC("Noc"), RAPORT("Raport"), NAZRANIA("Nagrania"), USTAWIENIA("Ustawienia") }
 
 private class EventsView(val events: List<SnoreEventEntity>, val health: NightHealth)
 
 @Composable
-fun AppRoot(repo: NightRepository, health: HealthConnectSource, openReportRequest: Int = 0) {
+fun AppRoot(repo: NightRepository, health: HealthConnectSource, openReportRequest: Int = 0, exporter: androidx.compose.runtime.ProvedStateValue<androidx.activity.compose.ManagedActivityResultLauncher<String, android.net.Uri>>?) {
     var tab by rememberSaveable { mutableStateOf(Tab.NOC) }
     var nightId by rememberSaveable { mutableStateOf<String?>(null) }
     var version by remember { mutableIntStateOf(0) }
@@ -94,6 +96,27 @@ fun AppRoot(repo: NightRepository, health: HealthConnectSource, openReportReques
             when {
                 clip != null && tab == Tab.RAPORT -> ClipAnalysisScreen(clip, repo.clipFile(clip), onBack = { analysing = null })
                 tab == Tab.NOC -> TonightScreen(onOpenSettings = { tab = Tab.USTAWIENIA })
+                tab == Tab.NAZRANIA -> {
+                    val vm = remember { RecordingsViewModel(repo.context, repo.db, health) }
+                    val recordings by remember { vm.all() }
+                    RecordingsScreen(
+                        recordings = recordings,
+                        repo = repo,
+                        onBack = { tab = Tab.RAPORT },
+                        onEventClick = { e ->
+                            player.stop()
+                            eventsView = EventsView(listOf(e), NightHealth(emptyList(), emptyList(), emptyList()))
+                            tab = Tab.RAPORT
+                        },
+                        onExport = { e ->
+                            val clip = repo.clipFile(e)
+                            clip?.let { c ->
+                                val intent = app.chrapak.export.ClipExporter(repo.context).export(e, c)
+                                exporter?.launch(intent)
+                            }
+                        },
+                    )
+                }
                 tab == Tab.USTAWIENIA -> SettingsScreen(health, repo)
                 events != null -> EventsScreen(
                     repo = repo,
@@ -106,6 +129,13 @@ fun AppRoot(repo: NightRepository, health: HealthConnectSource, openReportReques
                         eventsView = null
                     },
                     onAnalyze = { analysing = it },
+                    onExport = { e ->
+                        val clip = repo.clipFile(e)
+                        clip?.let { c ->
+                            val intent = app.chrapak.export.ClipExporter(repo.context).export(e, c)
+                            exporter?.launch(intent)
+                        }
+                    },
                 )
                 else -> ReportScreen(
                     repo = repo,

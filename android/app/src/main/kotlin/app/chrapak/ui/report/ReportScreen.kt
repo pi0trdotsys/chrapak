@@ -152,7 +152,8 @@ private fun NightContent(
     onAnalyze: (SnoreEventEntity) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val stats = NightReport.stats(night, data.events)
+    val stats = NightReport.stats(night, data.events, System.currentTimeMillis())
+    val tooShort = stats.tooShort
     var selected by remember(night.id, data.events) { mutableStateOf<SnoreEventEntity?>(null) }
     val endMs = repo.endOf(night, data.events)
 
@@ -214,8 +215,12 @@ private fun ScoreSection(stats: NightStats) {
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("${NightReport.scoreLabel(stats.score)} chrapanie", color = Palette.primary, style = MaterialTheme.typography.labelLarge)
-            Text("Chrapanie zajęło ${stats.percent}% nocy.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("${NightReport.scoreLabel(stats.score, tooShort)} chrapanie", color = Palette.primary, style = MaterialTheme.typography.labelLarge)
+            if (tooShort) {
+                Text("Próba za krótka na wynik (wymaga 30+ min)", color = Palette.amber, style = MaterialTheme.typography.bodySmall)
+            } else {
+                Text("Chrapanie zajęło ${stats.percent}% nocy.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
