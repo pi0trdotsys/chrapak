@@ -36,6 +36,7 @@ import app.chrapak.data.isNap
 import app.chrapak.data.closeOrphanedNights
 import app.chrapak.data.finishNight
 import app.chrapak.data.SnoreEventEntity
+import app.chrapak.data.pruneUncertain
 import app.chrapak.detection.DetectedEvent
 import app.chrapak.detection.DetectionConfig
 import app.chrapak.detection.DetectionPipeline
@@ -437,6 +438,8 @@ class ListeningService : Service() {
         val startMs = System.currentTimeMillis()
         closeOrphanedNights(db.nights(), db.events())
         val night = NightEntity(id = nightId, sleepStartMs = startMs, sleepEndMs = null, tags = if (startedByNap) NAP_TAG else "")
+        // Saved up front: events point at it, and the Tonight and Report screens read it while it is recorded.
+        db.nights().insert(night)
 
         val events = Channel<DetectedEvent>(Channel.UNLIMITED)
         val writer = launch(Dispatchers.IO) {
@@ -456,8 +459,11 @@ class ListeningService : Service() {
                         clipPath = file.relativeTo(filesDir).path,
                     ),
                 )
-                ListeningState.update { it.copy(eventCount = it.eventCount + 1) }
-                refreshNotification()
+                // Uncertain episodes keep their audio for review but are not counted as snoring.
+                if (event.confidence >= DetectionConfig.MIN_CONFIDENCE) {
+                    ListeningState.update { it.copy(eventCount = it.eventCount + 1) }
+                    refreshNotification()
+                }
             }
         }
 
@@ -471,116 +477,92 @@ class ListeningService : Service() {
             events.trySend(event)
         }
 
-        var retryCount = 0
-        var micSource: String? = null
         var record: AudioRecord? = null
-
-        while (!stopRequested && isActive) {
-            try {
-                record?.let {
-                    if (it.state != AudioRecord.STATE_INITIALIZED) {
-                        it.release()
-                        record = null
-                    }
+        try {
+            val chunk = ShortArray(sampleRate * READ_CHUNK_MS / 1000) // one read per chunk: fewer wake-ups, lower CPU
+            var lastUiUpdate = 0L
+            var readErrors = 0
+            while (!stopRequested && isActive && !pastAutoStop() && !windowEnded()) {
+                val mic = record ?: run {
+                    val (fresh, source) = createAudioRecord(sampleRate)
+                    fresh.startRecording()
+                    Log.i(TAG, "microphone started: $source")
+                    ListeningState.update { it.copy(micSource = source) }
+                    record = fresh
+                    fresh
                 }
-                if (record == null) {
-                    val (rec, source) = createAudioRecord(sampleRate)
-                    record = rec
-                    micSource = source
-                    ListeningState.update { it.copy(micSource = micSource) }
-                    record.startRecording()
-                    Log.i(TAG, "microphone started: $micSource")
+                val read = mic.read(chunk, 0, chunk.size)
+                if (read < 0) {
+                    // The microphone can drop out (another app took it, audio server restarted): reopen it a few times.
+                    Log.w(TAG, "microphone read error $read, reopening")
+                    runCatching { mic.stop() }
+                    mic.release()
+                    record = null
+                    if (++readErrors > MAX_READ_ERRORS) error("Mikrofon przestał działać (kod $read).")
+                    delay(READ_RETRY_DELAY_MS)
+                    continue
                 }
-
-                val chunk = ShortArray(sampleRate * READ_CHUNK_MS / 1000)
-                var lastUiUpdate = 0L
-                while (!stopRequested && isActive && !pastAutoStop() && !windowEnded()) {
-                    val read = record?.read(chunk, 0, chunk.size) ?: 0
-                    when {
-                        read < 0 -> {
-                            Log.w(TAG, "read error $read, will recreate")
-                            record?.stop()
-                            record?.release()
-                            record = null
-                            retryCount++
-                            if (retryCount > 5) error("Zbyt wiele błędów odczytu mikrofonu.")
-                            delay(200)
-                            continue
-                        }
-                        read == 0 -> {
-                            delay(30)
-                            continue
-                        }
-                        else -> retryCount = 0
-                    }
-                    pipeline.feed(chunk, read)
-                    if (startedByNap) probeNap(pipeline, classifier)
-                    if (debuggable) {
-                        val d = pipeline.takeDiagnostics()
-                        Log.d(
-                            TAG,
-                            "peak=%.1f dB ratio=%.2f active=%d/%d floor=%.1f dB".format(
-                                d.peakDb, d.lowBandRatioAtPeak, d.activeFrames, d.frames, d.noiseFloorDb,
-                            ),
-                        )
-                    }
-                    val now = System.currentTimeMillis()
-                    if (now - lastUiUpdate >= UI_UPDATE_MS) {
-                        lastUiUpdate = now
-                        ListeningState.update { it.copy(levelDb = rmsDb(chunk, read)) }
-                    }
-                    if (now - lastNotifyAtMs >= NOTIFICATION_REFRESH_MS) {
-                        lastNotifyAtMs = now
-                        refreshNotification()
-                        StatusWidget.refresh(applicationContext)
-                    }
+                if (read == 0) continue // blocking read; zero only on a spurious wake-up
+                readErrors = 0
+                pipeline.feed(chunk, read)
+                if (startedByNap) probeNap(pipeline, classifier)
+                if (debuggable) {
+                    val d = pipeline.takeDiagnostics()
+                    Log.d(
+                        TAG,
+                        "peak=%.1f dB ratio=%.2f active=%d/%d floor=%.1f dB".format(
+                            d.peakDb, d.lowBandRatioAtPeak, d.activeFrames, d.frames, d.noiseFloorDb,
+                        ),
+                    )
                 }
-                break
-            } catch (e: Exception) {
-                Log.e(TAG, "capture error: ${e.message}")
-                throw e
-            } finally {
-                record?.stop()
-                record?.release()
+                val now = System.currentTimeMillis()
+                if (now - lastUiUpdate >= UI_UPDATE_MS) {
+                    lastUiUpdate = now
+                    ListeningState.update { it.copy(levelDb = rmsDb(chunk, read)) }
+                }
+                if (now - lastNotifyAtMs >= NOTIFICATION_REFRESH_MS) {
+                    lastNotifyAtMs = now
+                    refreshNotification()
+                    StatusWidget.refresh(applicationContext)
+                }
             }
-        }
-
-        classifier?.close()
-        withContext(NonCancellable) {
-            pipeline.finish()
-            events.close()
-            writer.join()
-            db.nights().insert(night)
-            finishNight(db.nights(), db.events(), night, System.currentTimeMillis())
-            postSummary(db, night)
+        } finally {
+            record?.let {
+                runCatching { it.stop() }
+                it.release()
+            }
+            classifier?.close()
+            withContext(NonCancellable) {
+                pipeline.finish()
+                events.close()
+                writer.join()
+                finishNight(db.nights(), db.events(), night, System.currentTimeMillis())
+                postSummary(db, night)
+                runCatching { pruneUncertain(db.events(), filesDir, System.currentTimeMillis()) }
+            }
         }
     }
 
+    /**
+     * Opens the microphone. UNPROCESSED skips automatic gain control, which would flatten the snore
+     * dynamics, but only some phones offer it; the plain MIC and VOICE_RECOGNITION are fallbacks.
+     */
     @SuppressLint("MissingPermission")
     private fun createAudioRecord(sampleRate: Int): Pair<AudioRecord, String> {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
-        val sources = listOf(
-            android.media.MediaRecorder.AudioSource.UNPROCESSED to "UNPROCESSED",
-            android.media.MediaRecorder.AudioSource.MIC to "MIC",
-            android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION to "VOICE_RECOGNITION",
-        )
-
-        for ((src, name) in sources) {
-            val record = AudioRecord(
-                src,
-                sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                sampleRate * 2 * 4,
-            )
-            if (record.state == AudioRecord.STATE_INITIALIZED) {
-                Log.i(TAG, "using microphone source: $name")
-                return Pair(record, name)
-            }
+        val unprocessed = audioManager.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
+        val sources = buildList {
+            if (unprocessed) add(MediaRecorder.AudioSource.UNPROCESSED to "UNPROCESSED")
+            add(MediaRecorder.AudioSource.MIC to "MIC")
+            add(MediaRecorder.AudioSource.VOICE_RECOGNITION to "VOICE_RECOGNITION")
+        }
+        val minBytes = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        val bufferBytes = maxOf(minBytes, sampleRate * 2 * 4) // 4 s of slack for the reader
+        for ((source, name) in sources) {
+            val record = AudioRecord(source, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferBytes)
+            if (record.state == AudioRecord.STATE_INITIALIZED) return record to name
             record.release()
         }
-        Log.w(TAG, "no working microphone source found")
         error("Nie udało się zainicjować mikrofonu.")
     }
 
@@ -722,6 +704,8 @@ class ListeningService : Service() {
         private const val UI_UPDATE_MS = 1_000L
         private const val NOTIFICATION_REFRESH_MS = 60_000L
         private const val READ_CHUNK_MS = 500
+        private const val MAX_READ_ERRORS = 5
+        private const val READ_RETRY_DELAY_MS = 500L
         private const val WAKE_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000L
 
         fun start(context: Context, maxMs: Long = 0L) {

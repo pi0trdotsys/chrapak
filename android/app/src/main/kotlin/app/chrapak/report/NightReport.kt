@@ -2,6 +2,7 @@ package app.chrapak.report
 
 import app.chrapak.data.NightEntity
 import app.chrapak.data.SnoreEventEntity
+import app.chrapak.data.isSnoring
 import app.chrapak.health.SleepStageType
 import app.chrapak.health.StageSegment
 import app.chrapak.health.VitalPoint
@@ -9,7 +10,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Numbers shown at the top of the morning report. Events marked as false positives never count. */
+/** Numbers shown at the top of the morning report. Only episodes that are [isSnoring] count. */
 data class NightStats(
     val nightMs: Long,
     val snoringMs: Long,
@@ -28,7 +29,10 @@ object NightReport {
     /** Snoring for this share of the night counts as the worst score, 100. */
     const val FULL_SCORE_SHARE = 0.30
 
-    fun valid(events: List<SnoreEventEntity>) = events.filter { !it.falsePositive }
+    /** Recordings shorter than this (tests, short naps, a night just begun) get no score. */
+    const val MIN_SCORED_MS = 30 * 60_000L
+
+    fun valid(events: List<SnoreEventEntity>) = events.filter { it.isSnoring }
 
     fun stats(night: NightEntity, events: List<SnoreEventEntity>, nowMs: Long = System.currentTimeMillis()): NightStats {
         val valid = valid(events)
@@ -36,8 +40,8 @@ object NightReport {
         val end = night.sleepEndMs ?: max(lastEventEnd, nowMs)
         val nightMs = max(1L, max(end, lastEventEnd) - night.sleepStartMs)
 
-        // Minimum 30 minutes to have a meaningful score
-        val tooShort = night.sleepEndMs == null && nightMs < 30 * 60_000L
+        // The share of a few minutes says nothing about a night: short recordings get no score.
+        val tooShort = nightMs < MIN_SCORED_MS
 
         val snoringMs = min(nightMs, valid.sumOf { it.durationMs })
         val share = snoringMs.toDouble() / nightMs
@@ -54,7 +58,7 @@ object NightReport {
         )
     }
 
-    fun scoreLabel(score: Int, tooShort: Boolean) = when {
+    fun scoreLabel(score: Int, tooShort: Boolean = false) = when {
         tooShort -> "Za krótka"
         score < 40 -> "Lekkie"
         score < 70 -> "Umiarkowane"

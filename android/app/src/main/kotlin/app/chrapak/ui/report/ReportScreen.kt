@@ -152,15 +152,14 @@ private fun NightContent(
     onAnalyze: (SnoreEventEntity) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val stats = NightReport.stats(night, data.events, System.currentTimeMillis())
-    val tooShort = stats.tooShort
+    val stats = NightReport.stats(night, data.events)
     var selected by remember(night.id, data.events) { mutableStateOf<SnoreEventEntity?>(null) }
     val endMs = repo.endOf(night, data.events)
 
     if (data.events.isEmpty()) {
         Text("W tej nocy nie wykryto chrapania.", color = Palette.mutedForeground)
     }
-    ScoreSection(stats)
+    ScoreSection(stats, stillRecording = night.sleepEndMs == null)
     StatsGrid(stats)
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -198,7 +197,7 @@ private fun NightContent(
 }
 
 @Composable
-private fun ScoreSection(stats: NightStats) {
+private fun ScoreSection(stats: NightStats, stillRecording: Boolean) {
     val colors = LocalPalette.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
@@ -210,15 +209,20 @@ private fun ScoreSection(stats: NightStats) {
                 drawArc(colors.primary, -90f, 360f * stats.score / 100f, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${stats.score}", style = MaterialTheme.typography.headlineLarge)
+                Text(if (stats.tooShort) "–" else "${stats.score}", style = MaterialTheme.typography.headlineLarge)
                 Text("na 100", style = MaterialTheme.typography.labelSmall, color = Palette.mutedForeground)
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("${NightReport.scoreLabel(stats.score, tooShort)} chrapanie", color = Palette.primary, style = MaterialTheme.typography.labelLarge)
-            if (tooShort) {
-                Text("Próba za krótka na wynik (wymaga 30+ min)", color = Palette.amber, style = MaterialTheme.typography.bodySmall)
+            if (stats.tooShort) {
+                Text(if (stillRecording) "Nagrywam" else "Krótkie nagranie", color = Palette.primary, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    if (stillRecording) "Wynik pojawi się po 30 minutach nagrania." else "Wynik liczę dla nagrań od 30 minut. Chrapanie zajęło ${stats.percent}% czasu.",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
             } else {
+                Text("${NightReport.scoreLabel(stats.score)} chrapanie", color = Palette.primary, style = MaterialTheme.typography.labelLarge)
                 Text("Chrapanie zajęło ${stats.percent}% nocy.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }

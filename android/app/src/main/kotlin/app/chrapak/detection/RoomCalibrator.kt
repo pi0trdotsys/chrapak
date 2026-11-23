@@ -1,134 +1,79 @@
 package app.chrapak.detection
 
-import android.media.AudioFormat
+import android.annotation.SuppressLint
+import android.content.Context
 import android.media.AudioManager
+import android.media.AudioFormat
 import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.util.Log
-import kotlin.math.log10
-import kotlin.math.sqrt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 
 /**
- * Measures the room's quiet level by reading the microphone for 10 seconds and computing the 20th
- * percentile of band levels. This floor can be used to lower the absolute minimum threshold
- * (`DetectionConfig.gate.absoluteMinDb`) so the gate detects chrap even when the room is quieter.
- *
- * Calibration never raises the threshold – only lowers it for gentler detection.
+ * Measures how quiet the bedroom is: listens for a few seconds and takes a low percentile of the
+ * band levels, measured by the same [EnergyGate] the night uses, so the number means the same thing.
+ * The result can only make detection more sensitive (see [configFor]), never less.
  */
 object RoomCalibrator {
-    private const val SAMPLE_RATE = 16_000
-    private const val READ_MS = 10_000L
-    private const val FRAME_MS = 32
-    private const val HIGH_PASS_HZ = 100f
-    private const val LOW_PASS_HZ = 2000f
-
     private const val TAG = "ChrapakCalibrate"
+    const val LISTEN_MS = 10_000
 
-    /** Calibrate the room and return the measured quiet level in dBFS, or null on error. */
-    suspend fun calibrate(context: android.content.Context): Float? {
-        val record = openAudioRecord(context, SAMPLE_RATE) ?: return null
-        return try {
-            record.startRecording()
-            val frameSamples = SAMPLE_RATE * FRAME_MS / 1000
-            val chunk = ShortArray(SAMPLE_RATE * READ_MS / 1000)
-            val frame = ShortArray(frameSamples)
-            var frameFill = 0
-            var i = 0
-            val levels = mutableListOf<Float>()
-
-            // High-pass filter state
-            var lpHigh = 0f
-
-            while (i < chunk.size) {
-                val read = record.read(chunk, i, chunk.size - i)
-                if (read <= 0) break
-                i += read
-            }
-
-            // Process frames
-            var pos = 0
-            while (pos < i) {
-                val take = minOf(frameSamples, i - pos)
-                System.arraycopy(chunk, pos, frame, 0, take)
-                frameFill = take
-
-                val bandEnergy = computeBandEnergy(frame, frameFill, lpHigh)
-                val levelDb = 20f * log10(sqrt(bandEnergy / frameSamples).coerceAtLeast(1e-9f).toFloat())
-                levels.add(levelDb)
-
-                // Update high-pass state for next frame
-                lpHigh = 0f
-
-                pos += frameSamples
-            }
-
-            if (levels.isEmpty()) return null
-
-            // 20th percentile
-            levels.sort()
-            val idx = (levels.size * 0.2).toInt().coerceIn(0, levels.size - 1)
-            val floor = levels[idx]
-
-            Log.i(TAG, "calibrated floor: ${floor.toFixed(1)} dB (20th percentile, ${levels.size} frames)")
-            floor
-        } finally {
-            record.stop()
-            record.release()
-        }
-    }
-
-    private fun computeBandEnergy(frame: ShortArray, length: Int, lpHigh: Float): Double {
-        var bandEnergy = 0.0
-        val alphaHigh = onePoleAlpha(HIGH_PASS_HZ)
-        val alphaLow = onePoleAlpha(LOW_PASS_HZ)
-
-        var lpBand = 0f
-        for (i in 0 until length) {
-            val x = frame[i] / 32768f
-            lpHigh += alphaHigh * (x - lpHigh)
-            val highPassed = x - lpHigh
-            lpBand += alphaLow * (highPassed - lpBand)
-            bandEnergy += lpBand * lpBand
-        }
-        return bandEnergy
-    }
-
-    private fun onePoleAlpha(cutoffHz: Float): Float {
-        val dt = 1f / SAMPLE_RATE
-        val rc = 1f / (6.283185307f * cutoffHz)
-        return dt / (rc + dt)
-    }
-
-    private fun Float.toFixed(precision: Int): String =
-        String.format("%.${precision}f", this)
-
-    private fun openAudioRecord(
-        context: android.content.Context,
-        sampleRate: Int,
-    ): AudioRecord? {
-        val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE)
-            as AudioManager
-
-        val sources = listOf(
-            android.media.MediaRecorder.AudioSource.UNPROCESSED to "UNPROCESSED",
-            android.media.MediaRecorder.AudioSource.MIC to "MIC",
-            android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION to "VOICE_RECOGNITION",
+    /** The quiet level of the room in dBFS, or null when the microphone could not be read. */
+    @SuppressLint("MissingPermission") // the caller asks for the microphone first
+    suspend fun calibrate(context: Context, listenMs: Int = LISTEN_MS): Float? = withContext(Dispatchers.IO) {
+        val config = GateConfig()
+        val rate = config.sampleRate
+        val minBytes = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        val record = AudioRecord(
+            if (unprocessed(context)) MediaRecorder.AudioSource.UNPROCESSED else MediaRecorder.AudioSource.MIC,
+            rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBytes, rate * 2),
         )
-
-        for ((src, name) in sources) {
-            val record = AudioRecord(
-                src,
-                sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                sampleRate * 2 * 4,
-            )
-            if (record.state == AudioRecord.STATE_INITIALIZED) {
-                Log.i(TAG, "using microphone source: $name")
-                return record
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            record.release()
+            return@withContext null
+        }
+        try {
+            record.startRecording()
+            val samples = ShortArray(rate * listenMs / 1000)
+            var filled = 0
+            while (filled < samples.size) {
+                ensureActive()
+                val read = record.read(samples, filled, samples.size - filled)
+                if (read < 0) return@withContext null
+                filled += read
             }
+            floorOf(samples, filled, config)?.also { Log.i(TAG, "room floor %.1f dB".format(it)) }
+        } finally {
+            runCatching { record.stop() }
             record.release()
         }
-        Log.w(TAG, "no working microphone source found")
-        return null
     }
+
+    /**
+     * The 20th percentile of frame levels: low enough to ignore a cough or a car, high enough not
+     * to be fooled by one dead-silent frame. The first half second is skipped while the filters settle.
+     */
+    fun floorOf(samples: ShortArray, length: Int, config: GateConfig = GateConfig()): Float? {
+        val gate = EnergyGate(config)
+        val n = config.frameSamples
+        val skip = 500 / config.frameMs
+        val levels = mutableListOf<Float>()
+        var i = 0
+        var frame = 0
+        while (i + n <= length) {
+            val level = gate.process(samples, i).levelDb
+            if (frame++ >= skip) levels += level
+            i += n
+        }
+        if (levels.isEmpty()) return null
+        levels.sort()
+        return levels[(levels.size * 0.2).toInt().coerceIn(0, levels.size - 1)]
+    }
+
+    /** Same choice as the night's recording, so the floor is measured on the same microphone path. */
+    private fun unprocessed(context: Context): Boolean =
+        (context.getSystemService(Context.AUDIO_SERVICE) as AudioManager)
+            .getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
 }

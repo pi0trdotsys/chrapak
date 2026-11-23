@@ -17,9 +17,10 @@ Priorytetem jest mało energii, bo telefon pracuje całą noc.
 
 | Etap | Plik | Kiedy działa |
 |---|---|---|
-| Bramka energii | [`EnergyGate.kt`](app/src/main/kotlin/app/chrapak/detection/EnergyGate.kt) | Każda ramka 32 ms. Filtr pasmowy 100–2000 Hz, adaptacyjny próg względem ciszy w pokoju (minimum −70 dBFS). Kilka mnożeń na próbkę, bez modelu. Opcjonalny test udziału niskich tonów jest domyślnie wyłączony, bo na telefonie nie odróżniał chrapania od szumu. |
+| Bramka energii | [`EnergyGate.kt`](app/src/main/kotlin/app/chrapak/detection/EnergyGate.kt) | Każda ramka 32 ms. Filtr pasmowy 100–2000 Hz, adaptacyjny próg względem ciszy w pokoju (minimum zależne od czułości: −68 / −70 / −78 dBFS, kalibracja może je obniżyć, najniżej do −80 dBFS). Kilka mnożeń na próbkę, bez modelu. Opcjonalny test udziału niskich tonów jest domyślnie wyłączony, bo na telefonie nie odróżniał chrapania od szumu. |
 | Segmentacja | [`SnoreSegmenter.kt`](app/src/main/kotlin/app/chrapak/detection/SnoreSegmenter.kt) | Łączy aktywność rozdzieloną przerwami do 6 s w jeden epizod (cykl oddechu to 3–5 s). Odrzuca epizody krótsze niż 3 s oraz rzadkie, w których aktywnych ramek jest łącznie mniej niż 1,5 s. |
 | Klasyfikator | [`YamnetClassifier.kt`](app/src/main/kotlin/app/chrapak/detection/YamnetClassifier.kt) (interfejs w [`DetectionPipeline.kt`](app/src/main/kotlin/app/chrapak/detection/DetectionPipeline.kt)) | YAMNet przez LiteRT, klasa „Snoring”. Tylko gdy epizod jest otwarty i ramka jest aktywna, co ok. 1 s. Test pilnuje, że w ciszy nie wywołuje się ani razu. |
+| Decyzja | [`Entities.kt`](app/src/main/kotlin/app/chrapak/data/Entities.kt) (`isSnoring`) | Każdy epizod z bramki jest zapisywany razem z dźwiękiem. Do wyniku liczy się tylko ten, któremu YAMNet dał co najmniej 0,3. Pozostałe są „niepewne”: można ich posłuchać, ale po 7 dniach znikają, chyba że je zachowasz. |
 | Bufor kołowy | [`PreRollBuffer.kt`](app/src/main/kotlin/app/chrapak/detection/PreRollBuffer.kt) | 5 s dźwięku przed zdarzeniem w pamięci. Na dysk trafiają tylko klipy ze zdarzeniami. |
 
 Serwis ([`ListeningService.kt`](app/src/main/kotlin/app/chrapak/service/ListeningService.kt)) czyta mikrofon po 0,5 s, wybiera źródło `UNPROCESSED` (bez automatycznej regulacji głośności), jeśli telefon je wspiera, a zapis klipów i bazy robi na osobnej korutynie, żeby dysk nie opóźniał odczytu.
@@ -32,7 +33,7 @@ Plik modelu (4 MB, Apache 2.0) nie jest w repozytorium. Pobierz go skryptem, kt�
 ./scripts/fetch-yamnet.sh   # zapisuje app/src/main/assets/yamnet.tflite
 ```
 
-Bez modelu aplikacja działa na samej bramce, zdarzenia mają `confidence = 0.5`, a ekran pokazuje „brak modelu”. Indeks klasy „Snoring” jest czytany z etykiet zapisanych w pliku modelu.
+**Build bez modelu się nie uda** (`merge*Assets` kończy się komunikatem, żeby uruchomić skrypt). Wcześniej APK bez modelu budował się bez ostrzeżenia, a aplikacja po cichu działała na samej bramce i nie odróżniała chrapania od mowy. Tak było z wersją zainstalowaną na telefonie 23.11. Indeks klasy „Snoring” jest czytany z etykiet zapisanych w pliku modelu.
 
 ### Pomiar na telefonie
 
@@ -42,6 +43,8 @@ Test na Poco z mikrofonem `UNPROCESSED` (poziomy w dBFS):
 |---|---|
 | Chrapanie (naśladowane) | 0,74 |
 | Cisza, mowa, klaśnięcia | ≤ 0,02 |
+| Chrapanie (naśladowane, test 24.11) | 0,96 |
+| Mowa (ten sam test) | 0,00 |
 
 Pokój w ciszy ma ok. −85 dB, naśladowane chrapanie średnio ok. −64 dB. Próg `minConfidence` wynosi 0,3 i wymaga dostrojenia na prawdziwych nocach.
 
@@ -61,11 +64,11 @@ Compose, z motywem wybieranym w Ustawieniach.
 
 - **Noc.** Duży oddychający przycisk do włączania i zatrzymywania nasłuchu, czas trwania i licznik epizodów, spokojny wskaźnik poziomu dźwięku w pokoju, karta czuwania z oknem nocnym oraz lista kontrolna przed nocą (mikrofon, powiadomienia, wyjątek od oszczędzania baterii, ładowarka).
 - **Raport.** Wynik, statystyki, oś czasu ze snem, chrapaniem, SpO₂ i tętnem, wnioski i arkusz szczegółów epizodu.
-- **Nagrania.** Lista klipów z odtwarzaniem, „Zachowaj”, „Fałszywy alarm”, usuwaniem i przejściem do analizy.
+- **Nagrania.** Osobna karta: wszystkie noce i drzemki z liczbą epizodów i miejscem na dysku. Po dotknięciu nocy lista klipów z filtrami (Chrapanie, Niepewne, Zachowane, Fałszywe), odtwarzaniem, analizą, „Zachowaj”, „Fałszywy” i menu „Więcej”: udostępnij (dowolnej aplikacji), zapisz w plikach, usuń. To samo jest dostępne z Raportu.
 - **Analiza nagrania.** Liczona na telefonie: przebieg fali ze znacznikami chrapnięć, rytm (chrapnięć na minutę), najdłuższa przerwa, udział energii w pasmach 100–2000 Hz oraz to, co słyszy YAMNet sekunda po sekundzie i jakie dźwięki dominują. To obserwacje z jednego nagrania, nie diagnoza.
-- **Ustawienia.** Czuwanie i okno nocne, wyjątek od baterii, motyw, połączenie z Health Connect i podgląd ostatnich 24 h z pierścienia.
+- **Ustawienia.** Czuwanie i okno nocne, **czułość wykrywania** (Niska, Średnia, Wysoka) z **kalibracją pokoju** (10 s ciszy, próg może tylko spaść), wyjątek od baterii, motyw, połączenie z Health Connect i podgląd ostatnich 24 h z pierścienia.
 
-Wynik chrapania to udział chrapania w nocy: 30% nocy daje 100. Wniosek o REM i o SpO₂ pojawia się tylko wtedy, gdy są dane ze snu i saturacji.
+Wynik chrapania to udział chrapania w nocy: 30% nocy daje 100. Nagrania krótsze niż 30 minut (próby, krótkie drzemki, noc, która dopiero się zaczęła) nie dostają wyniku, bo udział z kilku minut nic nie mówi. Wniosek o REM i o SpO₂ pojawia się tylko wtedy, gdy są dane ze snu i saturacji.
 
 ## Motywy
 

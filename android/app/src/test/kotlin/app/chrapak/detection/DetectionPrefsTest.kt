@@ -28,17 +28,17 @@ class DetectionPrefsTest {
 
     @Test
     fun `calibrated floor never raises the threshold`() {
-        // Room is quiet at -80 dB, but preset for LOW is -68 dB
-        val low = configFor(Sensitivity.LOW, -80f)
-        assertEquals(-80f, low.gate.absoluteMinDb, 0.1f) // calibrated floor wins
-
-        // Room is loud at -65 dB, preset is -68 dB - should keep -68 (never raise)
-        val low2 = configFor(Sensitivity.LOW, -65f)
-        assertEquals(-68f, low2.gate.absoluteMinDb, 0.1f) // preset wins
-
-        // Calibrated -75 with HIGH preset (-78) -> calibrated wins
-        val high = configFor(Sensitivity.HIGH, -75f)
-        assertEquals(-75f, high.gate.absoluteMinDb, 0.1f)
+        // A very quiet room (-80 dB) lowers LOW's -68 dB threshold to 6 dB above the silence.
+        assertEquals(-74f, configFor(Sensitivity.LOW, -80f).gate.absoluteMinDb, 0.01f)
+        // A loud room (-65 dB) would mean -59 dB: higher than the preset, so the preset stays.
+        assertEquals(-68f, configFor(Sensitivity.LOW, -65f).gate.absoluteMinDb, 0.01f)
+        // HIGH's -78 dB is already below -75 + 6 = -69, so it stays too.
+        assertEquals(-78f, configFor(Sensitivity.HIGH, -75f).gate.absoluteMinDb, 0.01f)
+        // A dead-silent room (-95 dB) lowers it only to the -80 dB limit.
+        assertEquals(-80f, configFor(Sensitivity.MEDIUM, -95f).gate.absoluteMinDb, 0.01f)
+        for (s in Sensitivity.entries) for (floor in listOf(-95f, -80f, -70f, -50f)) {
+            assert(configFor(s, floor).gate.absoluteMinDb <= s.absoluteMinDb)
+        }
     }
 
     @Test

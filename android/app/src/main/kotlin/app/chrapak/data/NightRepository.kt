@@ -3,6 +3,8 @@ package app.chrapak.data
 import android.content.Context
 import app.chrapak.health.HealthConnectSource
 import app.chrapak.health.NightHealth
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /** What the report and clip list need for one night: our events plus whatever Health Connect has. */
@@ -40,14 +42,21 @@ class NightRepository(
         db.events().delete(event.id)
     }
 
-    fun export(event: SnoreEventEntity, clip: File, onResult: (Boolean) -> Unit) {
-        val exporter = ClipExporter(context)
-        val intent = exporter.export(event, clip)
-        // Store the intent for the caller to launch with registerForActivityResult
-        // In a real implementation, we'd store the intent in a state holder and the caller would launch it
+    /** Every night with its episodes and the space its clips take, newest first, for the Recordings tab. */
+    suspend fun recordings(): List<NightRecordings> = withContext(Dispatchers.IO) {
+        db.nights().all().map { night ->
+            val events = db.events().forNight(night.id)
+            NightRecordings(night, events, events.sumOf { clipFile(it)?.length() ?: 0L })
+        }
     }
 
     private companion object {
         const val PAD_MS = 30 * 60_000L
     }
+}
+
+/** One night as the Recordings tab lists it. */
+data class NightRecordings(val night: NightEntity, val events: List<SnoreEventEntity>, val clipBytes: Long) {
+    val snoring: Int get() = events.count { it.isSnoring }
+    val uncertain: Int get() = events.count { it.isUncertain }
 }

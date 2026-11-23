@@ -33,3 +33,18 @@ suspend fun closeOrphanedNights(nights: NightDao, events: SnoreEventDao) {
 }
 
 fun NightEntity.isNap(): Boolean = tags.split(',').contains(NAP_TAG)
+
+/** How long the audio of an uncertain episode is kept for review before it is removed. */
+const val UNCERTAIN_KEEP_MS = 7 * 24 * 60 * 60_000L
+
+/**
+ * Removes uncertain episodes older than [UNCERTAIN_KEEP_MS] that nobody kept or marked: every
+ * episode the gate catches is saved, so without this the noise of many nights would fill the phone.
+ * Starred clips and anything counted as snoring are never touched.
+ */
+suspend fun pruneUncertain(events: SnoreEventDao, filesDir: java.io.File, nowMs: Long) {
+    for (event in events.uncertainBefore(nowMs - UNCERTAIN_KEEP_MS, app.chrapak.detection.DetectionConfig.MIN_CONFIDENCE)) {
+        event.clipPath?.let { java.io.File(filesDir, it).delete() }
+        events.delete(event.id)
+    }
+}

@@ -50,6 +50,10 @@ interface SnoreEventDao {
 
     @Query("DELETE FROM snore_events WHERE id = :id")
     suspend fun delete(id: String)
+
+    /** Uncertain episodes nobody kept: their clips are removed after a while to save space. */
+    @Query("SELECT * FROM snore_events WHERE starred = 0 AND falsePositive = 0 AND confidence < :belowConfidence AND startMs < :beforeMs")
+    suspend fun uncertainBefore(beforeMs: Long, belowConfidence: Float): List<SnoreEventEntity>
 }
 
 @Database(entities = [NightEntity::class, SnoreEventEntity::class], version = 1, exportSchema = true)

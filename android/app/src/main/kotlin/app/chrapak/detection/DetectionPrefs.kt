@@ -31,19 +31,21 @@ object DetectionPrefs {
     fun setCalibratedFloorDb(context: Context, value: Float) =
         prefs(context).edit().putFloat(CALIBRATED_FLOOR, value).apply()
 
+    fun clearCalibratedFloor(context: Context) =
+        prefs(context).edit().remove(CALIBRATED_FLOOR).apply()
+
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 }
 
 /**
- * Build a `DetectionConfig` from the current sensitivity and (optionally) a calibrated floor.
- * Calibration never raises the absolute minimum threshold – only lowers it to be gentler.
+ * Builds the detection settings from the chosen sensitivity and, optionally, the measured quiet level
+ * of the room. The absolute threshold sits [CALIBRATION_HEADROOM_DB] above that level, and only when
+ * that is lower than the preset: a measurement can make detection more sensitive, never less.
  */
 fun configFor(sensitivity: Sensitivity, calibratedFloorDb: Float?): DetectionConfig {
     val adjustedMin = calibratedFloorDb?.let { db ->
-        // Never raise the threshold; calibrated floor is the room's quiet level.
-        // If the room is louder than the preset, keep the preset (safer).
-        sensitivity.absoluteMinDb.coerceAtMost(db + 6f)
+        sensitivity.absoluteMinDb.coerceAtMost(maxOf(db + CALIBRATION_HEADROOM_DB, LOWEST_CALIBRATED_DB))
     } ?: sensitivity.absoluteMinDb
 
     return DetectionConfig(
@@ -56,3 +58,12 @@ fun configFor(sensitivity: Sensitivity, calibratedFloorDb: Float?): DetectionCon
         minActiveMs = sensitivity.minActiveMs,
     )
 }
+/** How far above the measured silence the absolute threshold sits, so the room's own hiss never counts. */
+const val CALIBRATION_HEADROOM_DB = 6f
+
+/**
+ * However quiet the room, the threshold stays at or above this. A dead-silent bedroom measures around
+ * -95 dBFS on the UNPROCESSED microphone; a threshold near it would wake the model for every rustle,
+ * costing battery, while snoring loud enough to matter is well above -80 dBFS.
+ */
+const val LOWEST_CALIBRATED_DB = -80f

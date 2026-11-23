@@ -42,3 +42,10 @@ fun stageLabel(stage: SleepStageType): String = when (stage) {
     SleepStageType.LIGHT -> "Lekki sen"
     SleepStageType.DEEP -> "Głęboki sen"
 }
+
+/** Polish noun form for [n]: `plural(1, "nagranie", "nagrania", "nagrań")`. */
+fun plural(n: Int, one: String, few: String, many: String): String = when {
+    n == 1 -> one
+    n % 10 in 2..4 && n % 100 !in 12..14 -> few
+    else -> many
+}

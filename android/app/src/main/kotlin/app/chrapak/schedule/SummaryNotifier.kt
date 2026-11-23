@@ -26,7 +26,8 @@ object SummaryNotifier {
 
     fun text(stats: NightStats): String =
         if (stats.count == 0) "W tej nocy nie wykryłem chrapania."
-        else "Chrapanie zajęło ${stats.percent}% czasu (${durationLabel(stats.snoringMs)}) · ${stats.count} ${episodes(stats.count)} · wynik ${stats.score}/100 (${NightReport.scoreLabel(stats.score).lowercase()})."
+        else "Chrapanie zajęło ${stats.percent}% czasu (${durationLabel(stats.snoringMs)}) · ${stats.count} ${episodes(stats.count)}" +
+            if (stats.tooShort) "." else " · wynik ${stats.score}/100 (${NightReport.scoreLabel(stats.score).lowercase()})."
 
     private fun episodes(n: Int) = when {
         n == 1 -> "epizod"

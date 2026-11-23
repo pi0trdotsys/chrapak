@@ -43,3 +43,15 @@ data class SnoreEventEntity(
     val starred: Boolean = false,
     val falsePositive: Boolean = false,
 )
+
+/**
+ * Whether an episode counts as snoring in the report. Every episode the gate catches is saved with
+ * its audio, so a missed snore can still be found and replayed, but only those the classifier is
+ * reasonably sure about count. Ones marked as a false alarm never do.
+ */
+val SnoreEventEntity.isSnoring: Boolean
+    get() = !falsePositive && confidence >= app.chrapak.detection.DetectionConfig.MIN_CONFIDENCE
+
+/** Saved, but the classifier was not sure it was snoring: worth a listen, not counted. */
+val SnoreEventEntity.isUncertain: Boolean
+    get() = !falsePositive && confidence < app.chrapak.detection.DetectionConfig.MIN_CONFIDENCE

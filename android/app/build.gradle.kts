@@ -65,3 +65,15 @@ dependencies {
 
     testImplementation(libs.junit)
 }
+
+// The YAMNet model is not in git (scripts/fetch-yamnet.sh downloads it). Without it the app still
+// builds and runs, but on the energy gate alone, which cannot tell snoring from speech or a fan.
+// That failure is silent on the phone, so an APK without the model must not be built at all.
+val yamnetModel = layout.projectDirectory.file("src/main/assets/yamnet.tflite")
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    doFirst {
+        check(yamnetModel.asFile.isFile) {
+            "Missing ${yamnetModel.asFile}. Run android/scripts/fetch-yamnet.sh first."
+        }
+    }
+}

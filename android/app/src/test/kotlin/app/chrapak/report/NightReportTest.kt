@@ -16,8 +16,16 @@ class NightReportTest {
     private val min = 60_000L
     private val night = NightEntity("n", sleepStartMs = 0, sleepEndMs = 100 * min)
 
-    private fun event(startMin: Long, durMin: Long, peak: Float = -50f, false_: Boolean = false) =
-        SnoreEventEntity("e$startMin", "n", startMin * min, durMin * min, peak, peak - 10, 0.7f, null, falsePositive = false_)
+    private fun event(startMin: Long, durMin: Long, peak: Float = -50f, false_: Boolean = false, confidence: Float = 0.7f) =
+        SnoreEventEntity("e$startMin", "n", startMin * min, durMin * min, peak, peak - 10, confidence, null, falsePositive = false_)
+
+    @Test
+    fun `uncertain episodes are kept but not counted`() {
+        val stats = NightReport.stats(night, listOf(event(0, 10), event(20, 30, peak = -30f, confidence = 0.1f)))
+        assertEquals(1, stats.count)
+        assertEquals(10, stats.snoringMinutes)
+        assertEquals(-50f, stats.peakDb!!, 0f)
+    }
 
     @Test
     fun `stats count only valid events`() {
@@ -45,12 +53,19 @@ class NightReportTest {
     }
 
     @Test
-    fun `an open night ends at its last event instead of dividing by zero`() {
+    fun `a night in progress runs until now, and its score waits for 30 minutes`() {
         val open = NightEntity("n", sleepStartMs = 0, sleepEndMs = null)
-        val stats = NightReport.stats(open, listOf(event(0, 5)))
-        assertEquals(5L * min, stats.nightMs)
-        assertEquals(100, stats.percent)
-        val empty = NightReport.stats(open, emptyList())
+        val early = NightReport.stats(open, listOf(event(0, 5)), nowMs = 10 * min)
+        assertEquals(10L * min, early.nightMs)
+        assertEquals(50, early.percent)
+        assertTrue(early.tooShort)
+        assertEquals(0, early.score)
+        val later = NightReport.stats(open, listOf(event(0, 5)), nowMs = 50 * min)
+        assertFalse(later.tooShort)
+        assertEquals(33, later.score)
+        // An event reported after the clock moved on still counts in full, and nothing divides by zero.
+        assertEquals(5L * min, NightReport.stats(open, listOf(event(0, 5)), nowMs = 0).nightMs)
+        val empty = NightReport.stats(open, emptyList(), nowMs = 0)
         assertTrue(empty.nightMs >= 1)
         assertNull(empty.peakDb)
     }
@@ -62,6 +77,15 @@ class NightReportTest {
         assertTrue(stats.tooShort)
         assertEquals(0, stats.score)
         assertEquals("Za krótka", NightReport.scoreLabel(stats.score, stats.tooShort))
+    }
+
+    @Test
+    fun `a finished short test run gets no score either`() {
+        val short = NightEntity("n", sleepStartMs = 0, sleepEndMs = 2 * min)
+        val stats = NightReport.stats(short, listOf(event(0, 1)))
+        assertTrue(stats.tooShort)
+        assertEquals(0, stats.score)
+        assertEquals(50, stats.percent)
     }
 
     @Test

@@ -85,7 +85,7 @@ class DetectionPipelineTest {
     }
 
     @Test
-    fun `gate-only events have confidence 0.5`() {
+    fun `gate-only events get the fixed gate confidence`() {
         val (events, _) = run(classifier = null)
         assertEquals(1, events.size)
         assertEquals(GATE_ONLY_CONFIDENCE, events[0].confidence, 0f)

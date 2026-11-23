@@ -57,6 +57,7 @@ fun SettingsScreen(health: HealthConnectSource, repo: NightRepository) {
         Text("Ustawienia", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
         AutoListenCard()
+        DetectionCard()
         BatteryCard()
         ThemeCard()
         WidgetCard()

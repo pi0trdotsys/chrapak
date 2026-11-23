@@ -6,6 +6,7 @@ import app.chrapak.data.SnoreEventDao
 import app.chrapak.data.SnoreEventEntity
 import app.chrapak.data.closeOrphanedNights
 import app.chrapak.data.finishNight
+import app.chrapak.data.pruneUncertain
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -21,7 +22,8 @@ class OrphanedNightsTest {
         override suspend fun delete(id: String) { rows.removeAll { it.id == id } }
     }
 
-    private class FakeEvents(val rows: List<SnoreEventEntity>) : SnoreEventDao {
+    private class FakeEvents(rows: List<SnoreEventEntity>) : SnoreEventDao {
+        val rows = rows.toMutableList()
         override suspend fun insert(event: SnoreEventEntity) = error("not used")
         override suspend fun count(nightId: String) = rows.count { it.nightId == nightId }
         override suspend fun lastEventEndMs(nightId: String) =
@@ -29,7 +31,9 @@ class OrphanedNightsTest {
         override suspend fun forNight(nightId: String) = rows.filter { it.nightId == nightId }
         override suspend fun setStarred(id: String, starred: Boolean) = error("not used")
         override suspend fun setFalsePositive(id: String, falsePositive: Boolean) = error("not used")
-        override suspend fun delete(id: String) = error("not used")
+        override suspend fun delete(id: String) { rows.removeAll { it.id == id } }
+        override suspend fun uncertainBefore(beforeMs: Long, belowConfidence: Float) =
+            rows.filter { !it.starred && !it.falsePositive && it.confidence < belowConfidence && it.startMs < beforeMs }
     }
 
     private fun event(night: String, start: Long, duration: Long) =
@@ -92,5 +96,23 @@ class OrphanedNightsTest {
         finishNight(nights, FakeEvents(listOf(event("nap", 600_000, 20_000))), nap, endMs = 2 * 3_600_000L)
 
         assertEquals(2 * 3_600_000L, nights.rows.single().sleepEndMs)
+    }
+
+    @Test
+    fun `old uncertain clips are pruned, kept and confident ones stay`() = runBlocking {
+        val day = 24 * 60 * 60_000L
+        val now = 30 * day
+        fun e(id: String, ageDays: Int, confidence: Float, starred: Boolean = false) =
+            SnoreEventEntity(id, "n", now - ageDays * day, 5_000, -50f, -60f, confidence, null, starred = starred)
+        val events = FakeEvents(
+            listOf(
+                e("old-uncertain", 8, 0.1f),
+                e("new-uncertain", 2, 0.1f),
+                e("old-kept", 8, 0.1f, starred = true),
+                e("old-snoring", 8, 0.8f),
+            ),
+        )
+        pruneUncertain(events, java.io.File("/nonexistent"), now)
+        assertEquals(listOf("new-uncertain", "old-kept", "old-snoring"), events.rows.map { it.id })
     }
 }
