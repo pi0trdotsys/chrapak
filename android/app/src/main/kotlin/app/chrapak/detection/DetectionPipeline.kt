@@ -54,7 +54,14 @@ class DetectedEvent(
     val confidence: Float,
     val clipStartMs: Long,
     val pcm: ShortArray,
-)
+    /** Regularity of the bursts inside the episode, 0..1; see [BurstRhythm]. */
+    val rhythmScore: Float = 0f,
+    /** The classifier's best score for this episode, or null when no classifier was installed. */
+    val classifierScore: Float? = null,
+) {
+    /** True when either the model or the rhythm is convincing; the audio is kept either way. */
+    val isConfident: Boolean get() = DetectionQuality.isConfident(classifierScore, rhythmScore)
+}
 
 /** What the gate saw since the last [DetectionPipeline.takeDiagnostics]; for tuning thresholds. */
 data class GateDiagnostics(
@@ -209,6 +216,8 @@ class DetectionPipeline(
                     confidence = confidence,
                     clipStartMs = clipStartMs,
                     pcm = clip.copyOf(clipSize),
+                    rhythmScore = segment.rhythm.score,
+                    classifierScore = if (classifier == null) null else scoreMax,
                 ),
             )
         }

@@ -1,6 +1,7 @@
 package app.chrapak.detection
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -108,6 +109,29 @@ class DetectionPipelineTest {
         val (events, _) = run(classifier = null, signal = cut)
         assertEquals(1, events.size)
         assertEquals(5_000.0, events[0].durationMs.toDouble(), 200.0)
+    }
+
+    @Test
+    fun `a rhythmic episode is confident even when the model is not`() {
+        // Three bursts about 2.5 s apart: a breath cycle, even though the classifier scores low.
+        val (events, _) = run(classifier(0.1f))
+        assertEquals(1, events.size)
+        val event = events[0]
+        assertTrue("rhythm: ${event.rhythmScore}", event.rhythmScore >= DetectionQuality.RHYTHM_CONFIDENT)
+        assertTrue(event.isConfident)
+        assertEquals(0.1f, event.classifierScore!!, 0.0001f)
+        // The stored confidence is left alone: it stays the model's own number.
+        assertEquals(0.1f, event.confidence, 0.0001f)
+    }
+
+    @Test
+    fun `gate-only episodes report no classifier score but still carry the rhythm`() {
+        val (events, _) = run(classifier = null)
+        val event = events[0]
+        assertNull(event.classifierScore)
+        assertTrue("rhythm: ${event.rhythmScore}", event.rhythmScore > 0f)
+        assertTrue(event.isConfident)
+        assertEquals(GATE_ONLY_CONFIDENCE, event.confidence, 0f)
     }
 
     @Test

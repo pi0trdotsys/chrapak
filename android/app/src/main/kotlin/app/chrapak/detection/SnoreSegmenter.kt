@@ -1,6 +1,13 @@
 package app.chrapak.detection
 
-data class SnoreSegment(val startMs: Long, val endMs: Long, val peakDb: Float, val avgDb: Float) {
+data class SnoreSegment(
+    val startMs: Long,
+    val endMs: Long,
+    val peakDb: Float,
+    val avgDb: Float,
+    /** How regular the bursts inside the episode were; [BurstRhythm.NONE] when there were too few. */
+    val rhythm: BurstRhythm = BurstRhythm.NONE,
+) {
     val durationMs: Long get() = endMs - startMs
 }
 
@@ -15,6 +22,8 @@ class SnoreSegmenter(
     private val mergeGapMs: Long = 2_000,
     private val minEventMs: Long = 3_000,
     private val minActiveMs: Long = 0,
+    /** A pause longer than this inside an episode starts a new burst, used for the rhythm. */
+    private val burstGapMs: Long = 400,
 ) {
     private var frameMs = 0
     private var startMs = -1L
@@ -22,6 +31,7 @@ class SnoreSegmenter(
     private var peakDb = Float.NEGATIVE_INFINITY
     private var sumDb = 0.0
     private var activeFrames = 0
+    private val burstStarts = mutableListOf<Long>()
 
     val isOpen: Boolean get() = startMs >= 0
 
@@ -29,7 +39,14 @@ class SnoreSegmenter(
     fun onFrame(frameStartMs: Long, frameMs: Int, active: Boolean, levelDb: Float): SnoreSegment? {
         this.frameMs = frameMs
         if (active) {
-            if (!isOpen) startMs = frameStartMs
+            if (!isOpen) {
+                startMs = frameStartMs
+                burstStarts.clear()
+                burstStarts += frameStartMs
+            } else if (frameStartMs - lastActiveEndMs > burstGapMs) {
+                // The pause was long enough to be a separate sound, not a wobble inside one snore.
+                burstStarts += frameStartMs
+            }
             lastActiveEndMs = frameStartMs + frameMs
             if (levelDb > peakDb) peakDb = levelDb
             sumDb += levelDb
@@ -44,12 +61,14 @@ class SnoreSegmenter(
     fun flush(): SnoreSegment? = if (isOpen) close() else null
 
     private fun close(): SnoreSegment? {
-        val segment = SnoreSegment(startMs, lastActiveEndMs, peakDb, (sumDb / activeFrames).toFloat())
+        val rhythm = BurstRhythm.of(burstStarts.toList())
+        val segment = SnoreSegment(startMs, lastActiveEndMs, peakDb, (sumDb / activeFrames).toFloat(), rhythm)
         val activeMs = activeFrames.toLong() * frameMs
         startMs = -1L
         peakDb = Float.NEGATIVE_INFINITY
         sumDb = 0.0
         activeFrames = 0
+        burstStarts.clear()
         return if (segment.durationMs >= minEventMs && activeMs >= minActiveMs) segment else null
     }
 }
