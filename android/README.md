@@ -18,9 +18,11 @@ Priorytetem jest mało energii, bo telefon pracuje całą noc.
 | Etap | Plik | Kiedy działa |
 |---|---|---|
 | Bramka energii | [`EnergyGate.kt`](app/src/main/kotlin/app/chrapak/detection/EnergyGate.kt) | Każda ramka 32 ms. Filtr pasmowy 100–2000 Hz, adaptacyjny próg względem ciszy w pokoju (minimum zależne od czułości: −68 / −70 / −78 dBFS, kalibracja może je obniżyć, najniżej do −80 dBFS). Kilka mnożeń na próbkę, bez modelu. Opcjonalny test udziału niskich tonów jest domyślnie wyłączony, bo na telefonie nie odróżniał chrapania od szumu. |
-| Segmentacja | [`SnoreSegmenter.kt`](app/src/main/kotlin/app/chrapak/detection/SnoreSegmenter.kt) | Łączy aktywność rozdzieloną przerwami do 6 s w jeden epizod (cykl oddechu to 3–5 s). Odrzuca epizody krótsze niż 3 s oraz rzadkie, w których aktywnych ramek jest łącznie mniej niż 1,5 s. |
+| Segmentacja | [`SnoreSegmenter.kt`](app/src/main/kotlin/app/chrapak/detection/SnoreSegmenter.kt) | Łączy aktywność rozdzieloną przerwami do 6 s w jeden epizod (cykl oddechu to 3–5 s). Odrzuca epizody krótsze niż 3 s oraz rzadkie, w których aktywnych ramek jest łącznie mniej niż 1,5 s. Po drodze zapisuje początki osobnych serii (pauza ponad 0,4 s), z których liczy się rytm. |
+| Rytm | [`BurstRhythm.kt`](app/src/main/kotlin/app/chrapak/detection/BurstRhythm.kt) | Mediana odstępu między seriami (chrapanie: 2–8 s) i regularność (1 − odchylenie/mediana). Kaszel, drzwi i skrzypienie łóżka wypadają nieregularnie, więc dostają 0. Liczone raz na epizod, nie na ramkę. |
 | Klasyfikator | [`YamnetClassifier.kt`](app/src/main/kotlin/app/chrapak/detection/YamnetClassifier.kt) (interfejs w [`DetectionPipeline.kt`](app/src/main/kotlin/app/chrapak/detection/DetectionPipeline.kt)) | YAMNet przez LiteRT, klasa „Snoring”. Tylko gdy epizod jest otwarty i ramka jest aktywna, co ok. 1 s. Test pilnuje, że w ciszy nie wywołuje się ani razu. |
-| Decyzja | [`Entities.kt`](app/src/main/kotlin/app/chrapak/data/Entities.kt) (`isSnoring`) | Każdy epizod z bramki jest zapisywany razem z dźwiękiem. Do wyniku liczy się tylko ten, któremu YAMNet dał co najmniej 0,3. Pozostałe są „niepewne”: można ich posłuchać, ale po 7 dniach znikają, chyba że je zachowasz. |
+| Ocena epizodu | [`DetectionQuality.kt`](app/src/main/kotlin/app/chrapak/detection/DetectionQuality.kt) | Pewny, gdy model da ≥ 0,5 **albo** rytm ≥ 0,6. Dwa niezależne dowody: model i oddech. Żaden nie usuwa epizodu, tylko decyduje, czy pokazać go jako pewny, czy jako „do sprawdzenia”. |
+| Decyzja | [`Entities.kt`](app/src/main/kotlin/app/chrapak/data/Entities.kt) (`isSnoring`) | Każdy epizod z bramki jest zapisywany razem z dźwiękiem. Do wyniku liczy się tylko ten, któremu YAMNet dał co najmniej 0,3. Pozostałe są „niepewne”: można ich posłuchać, ale po 7 dniach znikają, chyba że je zachowasz. Ich liczba trafia do podsumowania jako „do sprawdzenia”. |
 | Bufor kołowy | [`PreRollBuffer.kt`](app/src/main/kotlin/app/chrapak/detection/PreRollBuffer.kt) | 5 s dźwięku przed zdarzeniem w pamięci. Na dysk trafiają tylko klipy ze zdarzeniami. |
 
 Serwis ([`ListeningService.kt`](app/src/main/kotlin/app/chrapak/service/ListeningService.kt)) czyta mikrofon po 0,5 s, wybiera źródło `UNPROCESSED` (bez automatycznej regulacji głośności), jeśli telefon je wspiera, a zapis klipów i bazy robi na osobnej korutynie, żeby dysk nie opóźniał odczytu.
@@ -76,11 +78,15 @@ Ustawienia → **Wygląd**: Systemowy (jasny w dzień, ciemny w nocy), Jasny, Ci
 
 ## Powiadomienia
 
+Wszystkie są lokalne. Przełączniki są w Ustawieniach → **Powiadomienia**; każdy kanał można też wyciszyć w systemowych ustawieniach Androida.
+
 - **Live Update (Android 16+).** Nasłuch w toku (przy drzemce dopiero po jej potwierdzeniu) jest promowanym powiadomieniem z licznikiem czasu, liczbą epizodów i paskiem postępu do końca okna lub drzemki (przy ręcznym nasłuchu pasek jest nieokreślony). System może pokazać je jako chip w pasku stanu. Sprawdzone na Androidzie 17: powiadomienie ma flagę `PROMOTED_ONGOING`. Na starszych wersjach to zwykłe trwałe powiadomienie z licznikiem.
-- **Podsumowanie po nocy.** Gdy nasłuch się kończy, powiadomienie mówi, ile trwało chrapanie, ile było epizodów i jaki jest wynik. Dotknięcie otwiera Raport. Można je wyłączyć w Ustawieniach.
+- **Podsumowanie po nocy.** Gdy nasłuch się kończy, powiadomienie mówi, ile trwało chrapanie, ile było epizodów i jaki jest wynik. Gdy model nie był pewny części nagrań, dochodzi „· 3 do sprawdzenia”, a akcja **„Posłuchaj”** otwiera zakładkę Nagrania (dotknięcie samej treści otwiera Raport). Można je wyłączyć.
+- **Tygodniowe podsumowanie.** W niedzielę o 10:00: liczba nocy, średni wynik i ile nocy było gorszych od poprzedniej. Dotknięcie otwiera Raport. Działa też bez włączonego czuwania, bo liczby tygodnia nie zależą od nasłuchu. Buduje je czysta funkcja ([`WeeklyDigest`](app/src/main/kotlin/app/chrapak/schedule/WeeklyDigest.kt)) pokryta testami; w Ustawieniach jest „Wyślij podsumowanie testowe”.
+- **Przypomnienie o ładowarce.** O 22:30, tylko gdy czuwanie jest włączone, telefon nie jest ładowany i nic nie jest nagrywane: „Połóż telefon na ładowarce…”. Akcje: **„Włącz teraz”** (start nasłuchu poza oknem) i **„Nie dziś”** (cisza do rana). Reguła ([`PrepReminderRule`](app/src/main/kotlin/app/chrapak/schedule/PrepReminder.kt)) jest czysta i testowana; godzina liczona jest w strefie lokalnej.
 - **Alerty.** „Nasłuch nie wystartował”, gdy Android nie pozwolił włączyć mikrofonu w tle albo po restarcie telefonu.
 
-Wszystkie powiadomienia są lokalne. Prawdziwy push z serwera (FCM) wymagałby własnego backendu i nie jest potrzebny do niczego powyżej.
+Alarmy digestu i przypomnienia są przestawiane razem z oknem nocnym (przy zmianie ustawień, starcie telefonu, zmianie strefy), a po każdym odpaleniu — na następny dzień lub niedzielę. Prawdziwy push z serwera (FCM) wymagałby własnego backendu i nie jest potrzebny do niczego powyżej.
 
 ## Widżet
 
