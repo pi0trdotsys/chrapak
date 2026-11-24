@@ -1,6 +1,7 @@
 package app.chrapak.widget
 
 import app.chrapak.schedule.ScheduleMath
+import app.chrapak.ui.plural
 
 /** What the home screen widget is telling the user. */
 enum class WidgetState { LISTENING, STANDBY, NEEDS_OPEN, OFF }
@@ -61,8 +62,6 @@ object WidgetModel {
 
     private fun episodes(n: Int) = when {
         n == 0 -> "cicho"
-        n == 1 -> "1 epizod"
-        n % 10 in 2..4 && n % 100 !in 12..14 -> "$n epizody"
-        else -> "$n epizodów"
+        else -> "$n ${plural(n, "epizod", "epizody", "epizodów")}"
     }
 }

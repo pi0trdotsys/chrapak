@@ -3,6 +3,7 @@ package app.chrapak.report
 import app.chrapak.data.NightEntity
 import app.chrapak.data.SnoreEventEntity
 import app.chrapak.data.isSnoring
+import app.chrapak.data.isUncertain
 import app.chrapak.health.SleepStageType
 import app.chrapak.health.StageSegment
 import app.chrapak.health.VitalPoint
@@ -21,6 +22,8 @@ data class NightStats(
     val longest: SnoreEventEntity?,
     val score: Int,
     val tooShort: Boolean = false,
+    /** Saved but the classifier was not sure: worth a listen, not counted. Zero when nothing uncertain. */
+    val suspectCount: Int = 0,
 ) {
     val snoringMinutes: Int get() = (snoringMs / 60_000.0).roundToInt()
 }
@@ -36,6 +39,7 @@ object NightReport {
 
     fun stats(night: NightEntity, events: List<SnoreEventEntity>, nowMs: Long = System.currentTimeMillis()): NightStats {
         val valid = valid(events)
+        val suspect = events.count { it.isUncertain }
         val lastEventEnd = valid.maxOfOrNull { it.startMs + it.durationMs } ?: night.sleepStartMs
         val end = night.sleepEndMs ?: max(lastEventEnd, nowMs)
         val nightMs = max(1L, max(end, lastEventEnd) - night.sleepStartMs)
@@ -55,6 +59,7 @@ object NightReport {
             longest = valid.maxByOrNull { it.durationMs },
             score = if (tooShort) 0 else min(100, (share / FULL_SCORE_SHARE * 100).roundToInt()),
             tooShort = tooShort,
+            suspectCount = suspect,
         )
     }
 

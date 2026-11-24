@@ -38,4 +38,16 @@ object ScheduleMath {
     }
 
     fun format(minuteOfDay: Int): String = "%02d:%02d".format(minuteOfDay / 60, minuteOfDay % 60)
+
+    /** The next [dayOfWeek] (1 = Monday ... 7 = Sunday) at [minuteOfDay], strictly after [nowMs]. */
+    fun nextWeeklyOccurrenceMs(nowMs: Long, minuteOfDay: Int, dayOfWeek: Int, zone: ZoneId): Long {
+        val now = Instant.ofEpochMilli(nowMs).atZone(zone)
+        val time = LocalTime.of(minuteOfDay / 60, minuteOfDay % 60)
+        val target = java.time.DayOfWeek.of(dayOfWeek)
+        var candidate = now.toLocalDate().with(target).atTime(time).atZone(zone)
+        if (!candidate.toInstant().isAfter(now.toInstant())) {
+            candidate = now.toLocalDate().plusWeeks(1).with(target).atTime(time).atZone(zone)
+        }
+        return candidate.toInstant().toEpochMilli()
+    }
 }

@@ -57,6 +57,10 @@
         </activity-alias>
 
         <receiver
+            android:name=".schedule.PrepReminderReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".schedule.AutoListenReceiver"
             android:exported="false">
             <intent-filter>

@@ -57,6 +57,7 @@ import app.chrapak.report.NightReport
 import app.chrapak.schedule.ScheduleMath
 import app.chrapak.schedule.SummaryNotifier
 import app.chrapak.ui.MainActivity
+import app.chrapak.ui.plural
 import app.chrapak.ui.timeLabel
 import app.chrapak.widget.StatusWidget
 import kotlinx.coroutines.delay
@@ -148,6 +149,8 @@ class ListeningService : Service() {
                 evaluateNap()
             }
             ACTION_NAP_CHECK -> evaluateNap()
+            // The evening reminder's "turn on now": starts listening whatever the window says.
+            ACTION_START_NOW -> startListening(byWindow = false, maxMs = 0L)
             // Debug builds only: pretend the screen has been off for the whole quiet period, so the sensor
             // verdict, the start, the probation and the clean-up can be tested without waiting or an alarm.
             ACTION_DEBUG_FORCE_NAP -> if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
@@ -635,7 +638,7 @@ class ListeningService : Service() {
             val events = ListeningState.status.value.eventCount
             val elapsedMs = (System.currentTimeMillis() - captureStartMs).coerceAtLeast(0)
             builder.setContentTitle(kind)
-                .setContentText("od ${timeLabel(captureStartMs)} · " + if (events == 0) "bez chrapania" else "$events ${if (events == 1) "epizod" else "epizodów"} chrapania")
+                .setContentText("od ${timeLabel(captureStartMs)} · " + if (events == 0) "bez chrapania" else "$events ${plural(events, "epizod", "epizody", "epizodów")} chrapania")
                 .setWhen(captureStartMs)
                 .setShowWhen(true)
                 .setUsesChronometer(true)
@@ -694,6 +697,8 @@ class ListeningService : Service() {
         const val ACTION_WINDOW_END = "app.chrapak.action.WINDOW_END"
         const val ACTION_WATCHDOG = "app.chrapak.action.WATCHDOG"
         const val ACTION_NAP_CHECK = "app.chrapak.action.NAP_CHECK"
+        /** Start listening now, ignoring the window: the evening reminder's "turn on now" action. */
+        const val ACTION_START_NOW = "app.chrapak.action.START_NOW"
         const val ACTION_DEBUG_FORCE_NAP = "app.chrapak.action.DEBUG_FORCE_NAP"
         const val ACTION_DEBUG_CONFIRM_NAP = "app.chrapak.action.DEBUG_CONFIRM_NAP"
         const val EXTRA_MAX_MS = "max_ms"

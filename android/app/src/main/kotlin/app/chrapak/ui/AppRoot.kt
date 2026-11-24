@@ -51,7 +51,7 @@ private data class EventsView(
 )
 
 @Composable
-fun AppRoot(repo: NightRepository, health: HealthConnectSource, openReportRequest: Int = 0) {
+fun AppRoot(repo: NightRepository, health: HealthConnectSource, openReportRequest: Int = 0, openRecordingsRequest: Int = 0) {
     var tab by rememberSaveable { mutableStateOf(Tab.NOC) }
     var nightId by rememberSaveable { mutableStateOf<String?>(null) }
     var version by remember { mutableIntStateOf(0) }
@@ -85,6 +85,14 @@ fun AppRoot(repo: NightRepository, health: HealthConnectSource, openReportReques
             eventsView = null
             nightId = null
             tab = Tab.RAPORT
+        }
+    }
+    // A tap on the "Posłuchaj" action asks for the recordings tab.
+    LaunchedEffect(openRecordingsRequest) {
+        if (openRecordingsRequest > 0) {
+            eventsView = null
+            analysing = null
+            tab = Tab.NAGRANIA
         }
     }
     DisposableEffect(Unit) { onDispose { player.stop() } }

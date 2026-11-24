@@ -10,9 +10,11 @@ import app.chrapak.R
 import app.chrapak.data.NightEntity
 import app.chrapak.report.NightReport
 import app.chrapak.report.NightStats
+import app.chrapak.ui.EXTRA_OPEN_RECORDINGS
 import app.chrapak.ui.EXTRA_OPEN_REPORT
 import app.chrapak.ui.MainActivity
 import app.chrapak.ui.durationLabel
+import app.chrapak.ui.plural
 import app.chrapak.ui.timeLabel
 
 /** The notification you see after listening ends: the night in one line, and a tap opens the report. */
@@ -24,15 +26,12 @@ object SummaryNotifier {
     fun shouldPost(night: NightEntity, stats: NightStats): Boolean =
         stats.count > 0 || stats.nightMs >= 30 * 60_000L
 
-    fun text(stats: NightStats): String =
-        if (stats.count == 0) "W tej nocy nie wykryłem chrapania."
-        else "Chrapanie zajęło ${stats.percent}% czasu (${durationLabel(stats.snoringMs)}) · ${stats.count} ${episodes(stats.count)}" +
-            if (stats.tooShort) "." else " · wynik ${stats.score}/100 (${NightReport.scoreLabel(stats.score).lowercase()})."
-
-    private fun episodes(n: Int) = when {
-        n == 1 -> "epizod"
-        n % 10 in 2..4 && n % 100 !in 12..14 -> "epizody"
-        else -> "epizodów"
+    fun text(stats: NightStats): String {
+        val snoring = if (stats.count == 0) "W tej nocy nie wykryłem chrapania."
+            else "Chrapanie zajęło ${stats.percent}% czasu (${durationLabel(stats.snoringMs)}) · ${stats.count} ${plural(stats.count, "epizod", "epizody", "epizodów")}" +
+                if (stats.tooShort) "." else " · wynik ${stats.score}/100 (${NightReport.scoreLabel(stats.score).lowercase()})."
+        val suspect = if (stats.suspectCount > 0) " · ${stats.suspectCount} do sprawdzenia" else ""
+        return snoring + suspect
     }
 
     fun post(context: Context, night: NightEntity, stats: NightStats, nap: Boolean) {
@@ -48,16 +47,24 @@ object SummaryNotifier {
         val end = night.sleepEndMs ?: System.currentTimeMillis()
         val title = (if (nap) "Drzemka" else "Noc") + " ${timeLabel(night.sleepStartMs)}–${timeLabel(end)}"
         val body = text(stats)
-        manager.notify(
-            NOTIFICATION_ID,
-            Notification.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_chrapak)
-                .setContentTitle(title)
-                .setContentText(body)
-                .setStyle(Notification.BigTextStyle().bigText(body))
-                .setContentIntent(open)
-                .setAutoCancel(true)
-                .build(),
-        )
+        val builder = Notification.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_chrapak)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(Notification.BigTextStyle().bigText(body))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+        // When the classifier was unsure about some episodes, point straight at them: the report
+        // is for last night, the recordings tab is for what to listen to.
+        if (stats.suspectCount > 0) {
+            val openRecordings = PendingIntent.getActivity(
+                context,
+                2,
+                Intent(context, MainActivity::class.java).putExtra(EXTRA_OPEN_RECORDINGS, true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            builder.addAction(android.R.drawable.ic_media_play, "Posłuchaj", openRecordings)
+        }
+        manager.notify(NOTIFICATION_ID, builder.build())
     }
 }

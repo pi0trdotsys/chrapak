@@ -96,6 +96,21 @@ class NightReportTest {
         assertTrue(stats.score > 0)
     }
 
+    @Test
+    fun `suspect episodes are counted separately from snoring and from false alarms`() {
+        val stats = NightReport.stats(
+            night,
+            listOf(
+                event(0, 10),                      // counted
+                event(20, 10, confidence = 0.1f),  // saved, not sure → suspect
+                event(40, 10, confidence = 0.05f), // another suspect
+                event(60, 10, false_ = true),      // marked as a false alarm: neither counted nor suspect
+            ),
+        )
+        assertEquals(1, stats.count)
+        assertEquals(2, stats.suspectCount)
+    }
+
     private val stages = listOf(
         StageSegment(0, 50 * min, SleepStageType.LIGHT),
         StageSegment(50 * min, 100 * min, SleepStageType.REM),

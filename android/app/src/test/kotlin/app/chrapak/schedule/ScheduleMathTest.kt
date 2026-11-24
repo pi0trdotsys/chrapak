@@ -52,4 +52,25 @@ class ScheduleMathTest {
         assertEquals("07:05", ScheduleMath.format(7 * 60 + 5))
         assertEquals(23 * 60 + 15, ScheduleMath.minuteOfDay(at(23, 15), zone))
     }
+
+    // 2026-03-01 is a Sunday.
+    private fun sundayAt(h: Int, m: Int) = LocalDateTime.of(2026, 3, 1, h, m).atZone(zone).toInstant().toEpochMilli()
+    private fun nextSundayAt(h: Int, m: Int) = LocalDateTime.of(2026, 3, 8, h, m).atZone(zone).toInstant().toEpochMilli()
+
+    @Test
+    fun `a weekly occurrence lands on the next chosen day of week`() {
+        val wednesday = LocalDateTime.of(2026, 2, 25, 9, 0).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(sundayAt(10, 0), ScheduleMath.nextWeeklyOccurrenceMs(wednesday, 10 * 60, 7, zone))
+    }
+
+    @Test
+    fun `a weekly occurrence later today is today, not in a week`() {
+        assertEquals(sundayAt(10, 0), ScheduleMath.nextWeeklyOccurrenceMs(sundayAt(9, 0), 10 * 60, 7, zone))
+    }
+
+    @Test
+    fun `a weekly occurrence exactly now or already past moves to the next week`() {
+        assertEquals(nextSundayAt(10, 0), ScheduleMath.nextWeeklyOccurrenceMs(sundayAt(10, 0), 10 * 60, 7, zone))
+        assertEquals(nextSundayAt(10, 0), ScheduleMath.nextWeeklyOccurrenceMs(sundayAt(11, 0), 10 * 60, 7, zone))
+    }
 }

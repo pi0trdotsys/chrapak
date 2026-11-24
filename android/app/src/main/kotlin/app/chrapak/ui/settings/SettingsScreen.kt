@@ -58,6 +58,7 @@ fun SettingsScreen(health: HealthConnectSource, repo: NightRepository) {
 
         AutoListenCard()
         DetectionCard()
+        NotificationsCard()
         BatteryCard()
         ThemeCard()
         WidgetCard()

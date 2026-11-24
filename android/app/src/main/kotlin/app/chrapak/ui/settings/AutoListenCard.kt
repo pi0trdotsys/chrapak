@@ -50,7 +50,6 @@ fun AutoListenCard() {
     var endMin by remember { mutableIntStateOf(AutoListenPrefs.endMin(context)) }
     var scheduleOn by remember { mutableStateOf(AutoListenPrefs.scheduleOn(context)) }
     var napDetect by remember { mutableStateOf(AutoListenPrefs.napDetect(context)) }
-    var summaryOn by remember { mutableStateOf(AutoListenPrefs.summaryOn(context)) }
     var editingStart by remember { mutableStateOf<Boolean?>(null) }
 
     val permissions = buildList {
@@ -121,16 +120,6 @@ fun AutoListenCard() {
                     "Poza oknem nocnym, gdy ekran jest wygaszony od 15 minut, a telefon leży nieruchomo (nie w kieszeni ani w ręku), zaczynam sprawdzać, czy to drzemka. Słucham kilka minut: jeśli słychać mowę, telewizję czy kroki, odpuszczam. Dopiero oddech lub chrapanie w cichym pokoju potwierdzają drzemkę, a wtedy pokazuję status na żywo. Kończy się po włączeniu ekranu albo po 3 godzinach.",
                     color = Palette.mutedForeground,
                     style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Podsumowanie po nocy w powiadomieniu", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Switch(
-                    checked = summaryOn,
-                    onCheckedChange = {
-                        summaryOn = it
-                        AutoListenPrefs.setSummaryOn(context, it)
-                    },
                 )
             }
             Text(

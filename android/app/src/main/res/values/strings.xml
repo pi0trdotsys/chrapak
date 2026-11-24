@@ -12,4 +12,7 @@
     <string name="notification_not_started_text">Android nie pozwolił włączyć mikrofonu w tle. Otwórz Chrapak, aby wznowić czuwanie.</string>
     <string name="tile_label">Chrapak</string>
     <string name="widget_description">Bieżący stan nasłuchu: słucham, czuwam albo wyłączony</string>
+    <string name="notification_digest_title">Tydzień chrapania</string>
+    <string name="notification_prep_title">Chrapak zacznie wkrótce</string>
+    <string name="notification_prep_text">Połóż telefon na ładowarce, żeby noc się nagrała do końca.</string>
 </resources>
