@@ -73,4 +73,12 @@ class SnoreSegmenterTest {
         assertEquals(-20f, segment.peakDb, 0.001f)
         assertEquals(-30f, segment.avgDb, 0.001f)
     }
+
+    @Test
+    fun `a gate that never closes is cut into pieces of the maximum length`() {
+        val segmenter = SnoreSegmenter(mergeGapMs = 2_000, minEventMs = 3_000, maxEventMs = 6_000)
+        // 15 s of unbroken activity: two 6 s pieces and a 3 s remainder.
+        val segments = run(segmenter, "A".repeat(150) + ".".repeat(30))
+        assertEquals(listOf(0L to 6_000L, 6_000L to 12_000L, 12_000L to 15_000L), segments.map { it.startMs to it.endMs })
+    }
 }

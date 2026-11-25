@@ -90,7 +90,7 @@ class DetectionPipeline(
     private val onEvent: (DetectedEvent) -> Unit,
 ) {
     private val gate = EnergyGate(config.gate)
-    private val segmenter = SnoreSegmenter(config.mergeGapMs, config.minEventMs, config.minActiveMs)
+    private val segmenter = SnoreSegmenter(config.mergeGapMs, config.minEventMs, config.minActiveMs, maxEventMs = config.maxClipMs.toLong())
     private val sampleRate = config.gate.sampleRate
     private val frameSamples = config.gate.frameSamples
     private val frame = ShortArray(frameSamples)

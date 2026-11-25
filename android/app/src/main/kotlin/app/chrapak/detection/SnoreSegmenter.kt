@@ -24,6 +24,12 @@ class SnoreSegmenter(
     private val minActiveMs: Long = 0,
     /** A pause longer than this inside an episode starts a new burst, used for the rhythm. */
     private val burstGapMs: Long = 400,
+    /**
+     * Longest episode; 0 for no limit. In a quiet bedroom with a sensitive threshold the gate can
+     * stay open for half an hour of breathing and rustling with a few snores inside. Cut into
+     * pieces, each one gets its own verdict and its own clip, so only the snoring is kept and counted.
+     */
+    private val maxEventMs: Long = 0,
 ) {
     private var frameMs = 0
     private var startMs = -1L
@@ -51,6 +57,7 @@ class SnoreSegmenter(
             if (levelDb > peakDb) peakDb = levelDb
             sumDb += levelDb
             activeFrames++
+            if (maxEventMs > 0 && lastActiveEndMs - startMs >= maxEventMs) return close()
             return null
         }
         if (isOpen && frameStartMs - lastActiveEndMs >= mergeGapMs) return close()

@@ -18,6 +18,30 @@ class DebugReceiver : BroadcastReceiver() {
         // Notifications on demand, to check how they look without waiting for a night or a Sunday.
         when (intent.action) {
             "app.chrapak.debug.NOTIFY_PREP" -> { app.chrapak.schedule.PrepReminderNotifier.post(context); return }
+            "app.chrapak.debug.DROP_BELOW" -> {
+                // Applies the new episode rule to recordings made before it: removes episodes the model
+                // scored below the given snoring probability, unless they were starred or marked.
+                val below = intent.getFloatExtra("confidence", app.chrapak.detection.EpisodeJudge.DROP_BELOW)
+                val onlyNight = intent.getStringExtra("night") // optional: limit to one night
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        val db = app.chrapak.data.ChrapakDatabase.get(context)
+                        var removed = 0
+                        for (night in db.nights().all().filter { onlyNight == null || it.id == onlyNight }) for (e in db.events().forNight(night.id)) {
+                            if (e.confidence < below && !e.starred && !e.falsePositive) {
+                                e.clipPath?.let { java.io.File(context.filesDir, it).delete() }
+                                db.events().delete(e.id)
+                                removed++
+                            }
+                        }
+                        Log.i("ChrapakDebug", "removed $removed episodes below $below")
+                    } finally {
+                        pending.finish()
+                    }
+                }
+                return
+            }
             "app.chrapak.debug.SEED_NIGHTS" -> {
                 // Two made-up finished nights (yesterday and the night before), no audio: for screenshots
                 // and notification checks on an emulator, which has no microphone input to record.
