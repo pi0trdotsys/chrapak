@@ -2,6 +2,7 @@ package app.chrapak.schedule
 
 import app.chrapak.data.NightEntity
 import app.chrapak.data.SnoreEventEntity
+import app.chrapak.data.isNap
 import app.chrapak.data.isSnoring
 import app.chrapak.report.NightReport
 import app.chrapak.report.NightStats
@@ -16,6 +17,11 @@ data class WeeklyDigest(
     val worseThanPrevCount: Int,
     /** When there are no nights, the whole notification is skipped. */
     val isEmpty: Boolean = false,
+    /** Average score of the 7 days before, for a "better / worse than last week" note; null when unknown. */
+    val previousAverageScore: Int? = null,
+    /** The worst scored night of the week: its start and score. Null when no night has a score. */
+    val worstStartMs: Long? = null,
+    val worstScore: Int? = null,
 )
 
 /**
@@ -38,28 +44,61 @@ object WeeklyDigestBuilder {
     ): WeeklyDigest {
         if (nights.isEmpty()) return WeeklyDigest(0, null, 0, isEmpty = true)
         val cutoff = startOfDay(nowMs, zone) - (lookbackDays - 1) * DAY_MS
-        val closed = nights.filter { it.sleepEndMs != null && it.sleepStartMs >= cutoff }
+        val previousCutoff = cutoff - lookbackDays * DAY_MS
+        // Naps are not nights: a 20-minute nap would drag the week's average around.
+        val closed = nights.filter { it.sleepEndMs != null && it.sleepStartMs >= cutoff && !it.isNap() }
         if (closed.isEmpty()) return WeeklyDigest(0, null, 0, isEmpty = true)
-        val stats = closed.map { night ->
-            val events = eventsByNight[night.id].orEmpty()
+        fun scored(list: List<NightEntity>) = list.map { night ->
             // The week has already ended: use the night end as the reference, not now.
-            NightReport.stats(night, events, nowMs = night.sleepEndMs!!)
-        }
-        val scored = stats.filter { !it.tooShort }
-        val avg = if (scored.isNotEmpty()) (scored.sumOf { it.score }.toDouble() / scored.size).roundToInt() else null
+            night to NightReport.stats(night, eventsByNight[night.id].orEmpty(), nowMs = night.sleepEndMs!!)
+        }.filter { !it.second.tooShort }
+        val scored = scored(closed)
+        val avg = average(scored.map { it.second.score })
         // A night counts as "worse" if it scored strictly more than the night before it, in the same week.
-        val worse = scored.zipWithNext().count { (prev, curr) -> curr.score > prev.score }
-        return WeeklyDigest(nightCount = closed.size, averageScore = avg, worseThanPrevCount = worse)
+        val worse = scored.map { it.second }.zipWithNext().count { (prev, curr) -> curr.score > prev.score }
+        val previous = scored(nights.filter { it.sleepEndMs != null && !it.isNap() && it.sleepStartMs in previousCutoff until cutoff })
+        val worst = scored.maxByOrNull { it.second.score }
+        return WeeklyDigest(
+            nightCount = closed.size,
+            averageScore = avg,
+            worseThanPrevCount = worse,
+            previousAverageScore = average(previous.map { it.second.score }),
+            worstStartMs = worst?.first?.sleepStartMs,
+            worstScore = worst?.second?.score,
+        )
     }
 
-    /** Human line for the notification, never empty when the digest is not empty. */
-    fun line(digest: WeeklyDigest): String {
+    /**
+     * Human line for the notification, never empty when the digest is not empty: the nights, the
+     * average against the week before, and the worst night to look at.
+     */
+    fun line(digest: WeeklyDigest, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
         if (digest.isEmpty || digest.nightCount == 0) return ""
         val nights = "${digest.nightCount} ${plural(digest.nightCount, "noc", "noce", "nocy")}"
-        val score = digest.averageScore?.let { " · średni wynik $it/100" } ?: ""
-        val worse = if (digest.worseThanPrevCount > 0)
-            " · ${digest.worseThanPrevCount} ${plural(digest.worseThanPrevCount, "noc gorsza", "noce gorsze", "nocy gorszych")} od poprzedniej" else ""
-        return "$nights$score$worse"
+        val avg = digest.averageScore ?: return "$nights · za krótkie na wynik"
+        val trend = digest.previousAverageScore?.let { prev ->
+            val word = when {
+                avg <= prev - 10 -> "lepiej niż"
+                avg >= prev + 10 -> "gorzej niż"
+                else -> "podobnie jak"
+            }
+            " ($word tydzień wcześniej: $prev/100)"
+        } ?: ""
+        val worst = if (digest.worstStartMs != null && digest.worstScore != null && digest.nightCount > 1)
+            " · najgorsza noc: ${dayLabel(digest.worstStartMs, zone)}, ${digest.worstScore}/100" else ""
+        return "$nights · średni wynik $avg/100$trend$worst"
+    }
+
+    private fun average(scores: List<Int>): Int? =
+        if (scores.isEmpty()) null else (scores.sum().toDouble() / scores.size).roundToInt()
+
+    private val dayNames = listOf("poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela")
+
+    /** The evening a night began on: a night started at 1:00 on Tuesday belongs to Monday. */
+    private fun dayLabel(startMs: Long, zone: java.time.ZoneId): String {
+        val local = java.time.Instant.ofEpochMilli(startMs).atZone(zone)
+        val day = if (local.hour < 12) local.minusDays(1) else local
+        return dayNames[day.dayOfWeek.value - 1]
     }
 
     private const val DAY_MS = 24 * 60 * 60_000L

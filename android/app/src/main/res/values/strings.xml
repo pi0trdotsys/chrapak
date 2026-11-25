@@ -13,6 +13,6 @@
     <string name="tile_label">Chrapak</string>
     <string name="widget_description">Bieżący stan nasłuchu: słucham, czuwam albo wyłączony</string>
     <string name="notification_digest_title">Tydzień chrapania</string>
-    <string name="notification_prep_title">Chrapak zacznie wkrótce</string>
-    <string name="notification_prep_text">Połóż telefon na ładowarce, żeby noc się nagrała do końca.</string>
+    <string name="notification_prep_title">Nasłuch zacznie się o %1$s</string>
+    <string name="notification_prep_text">Telefon nie jest na ładowarce. Podłącz go i połóż przy łóżku, żeby noc nagrała się do końca.</string>
 </resources>

@@ -71,9 +71,7 @@ class AutoListenReceiver : BroadcastReceiver() {
                     armed = AutoListenPrefs.armed(context),
                     scheduleOn = AutoListenPrefs.scheduleOn(context),
                     listening = ListeningState.status.value.listening,
-                    // A charging check needs a BatteryManager hook; the rule defaults to "unknown" by
-                    // passing false so the reminder can still be useful when the user forgot the cable.
-                    charging = false,
+                    charging = isCharging(context),
                     hasNightTonight = false,
                     reminderShownAtMs = PrepReminderPrefs.lastShownMs(context).takeIf { it > 0 },
                     nowMs = System.currentTimeMillis(),

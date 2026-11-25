@@ -31,12 +31,33 @@ class DetectionPipelineTest {
         return events to pipeline
     }
 
-    private fun classifier(score: Float) = object : SnoreClassifier {
+    private fun classifier(score: Float, awake: Float = 0f) = object : SnoreClassifier {
         override val windowSamples = 15_600
         override fun score(window: ShortArray): Float {
             assertEquals(15_600, window.size)
             return score
         }
+        override fun evidence(window: ShortArray) = NapEvidence(awake = awake, snoring = score(window), breathing = 0f)
+    }
+
+    @Test
+    fun `an episode the model hears no snoring in is dropped, audio and all`() {
+        val (events, pipeline) = run(classifier(0.02f))
+        assertEquals(0, events.size)
+        assertEquals(1, pipeline.droppedEpisodes)
+    }
+
+    @Test
+    fun `speech with a trace of snoring is dropped`() {
+        val (events, _) = run(classifier(0.15f, awake = 0.8f))
+        assertEquals(0, events.size)
+    }
+
+    @Test
+    fun `clear snoring is kept even when someone talks too`() {
+        val (events, _) = run(classifier(0.7f, awake = 0.8f))
+        assertEquals(1, events.size)
+        assertEquals(0.7f, events[0].confidence, 0.0001f)
     }
 
     @Test
@@ -76,11 +97,10 @@ class DetectionPipelineTest {
     }
 
     @Test
-    fun `classifier can lower confidence but not remove the episode`() {
+    fun `weak snoring in a breathing rhythm is kept with its audio`() {
         val (events, pipeline) = run(classifier(0.1f))
-        // Episode still exists even with low confidence (below MIN_CONFIDENCE = 0.3)
         assertEquals(1, events.size)
-        assertEquals(0.1f, events[0].confidence, 0.0001f)
+        assertEquals(DetectionConfig.MIN_CONFIDENCE, events[0].confidence, 0.0001f)
         assertTrue("audio PCM should be present", events[0].pcm.isNotEmpty())
         assertTrue(pipeline.classifierCalls > 0)
     }
@@ -120,8 +140,8 @@ class DetectionPipelineTest {
         assertTrue("rhythm: ${event.rhythmScore}", event.rhythmScore >= DetectionQuality.RHYTHM_CONFIDENT)
         assertTrue(event.isConfident)
         assertEquals(0.1f, event.classifierScore!!, 0.0001f)
-        // The stored confidence is left alone: it stays the model's own number.
-        assertEquals(0.1f, event.confidence, 0.0001f)
+        // The rhythm lifts the stored confidence to the counting bar; the model's own number is kept apart.
+        assertEquals(DetectionConfig.MIN_CONFIDENCE, event.confidence, 0.0001f)
     }
 
     @Test

@@ -35,6 +35,8 @@ class YamnetClassifier private constructor(
         return flatOutput[snoringIndex]
     }
 
+    override fun evidence(window: ShortArray): NapEvidence = napEvidence(window)
+
     override fun napEvidence(window: ShortArray): NapEvidence {
         infer(window)
         return NapEvidence(

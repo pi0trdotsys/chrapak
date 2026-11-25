@@ -89,12 +89,31 @@ class WeeklyDigestTest {
         val digest = build(night(2, 10), night(1, 72))
         val line = WeeklyDigestBuilder.line(digest)
         assertTrue(line, line.contains("średni wynik"))
-        assertTrue(line, line.contains("noc gorsza od poprzedniej"))
+        assertTrue(line, line.contains("najgorsza noc"))
     }
 
     @Test
     fun `a line is only produced for a digest that is not empty`() {
         assertFalse(build(night(1, 24)).isEmpty)
         assertEquals("", WeeklyDigestBuilder.line(WeeklyDigest(0, null, 0, isEmpty = true)))
+    }
+
+    @Test
+    fun `the week is compared with the week before and names the worst night`() {
+        // This week: nights 1 and 2 days ago. The week before: 9 days ago, heavy snoring.
+        val digest = build(night(1, 10), night(2, 72), night(9, 150))
+        assertEquals(2, digest.nightCount)
+        assertEquals(100, digest.previousAverageScore)
+        val line = WeeklyDigestBuilder.line(digest, zone)
+        assertTrue(line, line.contains("lepiej niż tydzień wcześniej: 100/100"))
+        // Two days before Sunday 10 March is Friday; that night began on Thursday evening.
+        assertTrue(line, line.contains("najgorsza noc: czwartek, 50/100"))
+    }
+
+    @Test
+    fun `naps do not count towards the week`() {
+        val (nap, events) = night(1, 30)
+        val digest = WeeklyDigestBuilder.build(listOf(nap.copy(tags = "drzemka")), mapOf(nap.id to events), now, zone = zone)
+        assertTrue(digest.isEmpty)
     }
 }

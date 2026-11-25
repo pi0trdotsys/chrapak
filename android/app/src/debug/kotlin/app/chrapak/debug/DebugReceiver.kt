@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import kotlinx.coroutines.launch
 import app.chrapak.schedule.AutoListenPrefs
 import app.chrapak.schedule.AutoListenScheduler
 
@@ -14,6 +15,55 @@ import app.chrapak.schedule.AutoListenScheduler
  */
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // Notifications on demand, to check how they look without waiting for a night or a Sunday.
+        when (intent.action) {
+            "app.chrapak.debug.NOTIFY_PREP" -> { app.chrapak.schedule.PrepReminderNotifier.post(context); return }
+            "app.chrapak.debug.SEED_NIGHTS" -> {
+                // Two made-up finished nights (yesterday and the night before), no audio: for screenshots
+                // and notification checks on an emulator, which has no microphone input to record.
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        val db = app.chrapak.data.ChrapakDatabase.get(context)
+                        val now = System.currentTimeMillis()
+                        val hour = 3_600_000L
+                        for ((n, minutes) in listOf(2 to listOf(4, 6, 3, 8, 5, 9, 7, 6, 4), 1 to listOf(3, 2, 5, 2, 4))) {
+                            val start = now - n * 24 * hour - 8 * hour
+                            val id = "seed-$n"
+                            db.nights().insert(app.chrapak.data.NightEntity(id, start, start + 8 * hour))
+                            minutes.forEachIndexed { i, m ->
+                                db.events().insert(
+                                    app.chrapak.data.SnoreEventEntity("$id-$i", id, start + (i + 1) * 45 * 60_000L, m * 60_000L, -45f, -55f, 0.8f, null),
+                                )
+                            }
+                        }
+                    } finally {
+                        pending.finish()
+                    }
+                }
+                return
+            }
+            "app.chrapak.debug.NOTIFY_SUMMARY", "app.chrapak.debug.NOTIFY_DIGEST" -> {
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        if (intent.action == "app.chrapak.debug.NOTIFY_DIGEST") {
+                            app.chrapak.schedule.WeeklyDigestNotifier.post(context)
+                        } else {
+                            val db = app.chrapak.data.ChrapakDatabase.get(context)
+                            val nights = db.nights().all().filter { it.sleepEndMs != null }
+                            val stats = nights.map { app.chrapak.report.NightReport.stats(it, db.events().forNight(it.id)) }
+                            nights.firstOrNull()?.let { night ->
+                                app.chrapak.schedule.SummaryNotifier.post(context, night, stats[0], nap = false, previous = stats.drop(1).firstOrNull { !it.tooShort })
+                            }
+                        }
+                    } finally {
+                        pending.finish()
+                    }
+                }
+                return
+            }
+        }
         if (intent.action == "app.chrapak.debug.SET_THEME") {
             runCatching { app.chrapak.ui.theme.ThemeChoice.valueOf(intent.getStringExtra("theme").orEmpty()) }
                 .onSuccess { app.chrapak.ui.theme.ThemeState.set(context, it) }

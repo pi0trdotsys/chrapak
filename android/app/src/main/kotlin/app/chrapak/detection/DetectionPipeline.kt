@@ -16,6 +16,12 @@ interface SnoreClassifier {
      * music, typing, footsteps), snoring, or breathing. Used to confirm or call off a nap guess.
      */
     fun napEvidence(window: ShortArray): NapEvidence = NapEvidence(0f, 0f, 0f)
+
+    /**
+     * Everything one window says, from a single inference: snoring, and the awake sounds (speech,
+     * television, music) that rule an episode out. The default only knows snoring.
+     */
+    fun evidence(window: ShortArray): NapEvidence = NapEvidence(awake = 0f, snoring = score(window), breathing = 0f)
 }
 
 /** Probabilities (0..1) from one window of audio, as far as the nap decision needs them. */
@@ -102,6 +108,13 @@ class DetectionPipeline(
 
     private var lastClassifyMs = 0L
     private var scoreMax = 0f
+
+    /** Episodes the gate caught but the model ruled out; nothing of them is saved. For diagnostics. */
+    var droppedEpisodes = 0
+        private set
+    var lastDropReason: String? = null
+        private set
+    private var awakeMax = 0f
     private var scoreCount = 0
 
     private var diagPeak = Float.NEGATIVE_INFINITY
@@ -177,6 +190,7 @@ class DetectionPipeline(
         clipStartMs = frameEndMs - snapshot.size * 1000L / sampleRate
         lastClassifyMs = frameEndMs
         scoreMax = 0f
+        awakeMax = 0f
         scoreCount = 0
     }
 
@@ -192,34 +206,39 @@ class DetectionPipeline(
         if (frameStartMs - lastClassifyMs < config.classifyEveryMs) return
         if (ring.size < c.windowSamples) return
         lastClassifyMs = frameStartMs
-        val score = c.score(ring.latest(c.windowSamples))
+        val evidence = c.evidence(ring.latest(c.windowSamples))
         classifierCalls++
         scoreCount++
-        if (score > scoreMax) scoreMax = score
+        if (evidence.snoring > scoreMax) scoreMax = evidence.snoring
+        if (evidence.awake > awakeMax) awakeMax = evidence.awake
     }
 
     private fun close(segment: SnoreSegment?) {
         if (segment != null) {
-            val confidence = when {
-                classifier == null -> GATE_ONLY_CONFIDENCE
-                scoreCount == 0 -> 0f
-                else -> scoreMax
-            }
-            // Emitted episode always has PCM + metadata; confidence is just metadata.
-            // Classifier can lower confidence, but not remove the episode or its audio.
-            onEvent(
-                DetectedEvent(
-                    startMs = segment.startMs,
-                    durationMs = segment.durationMs,
-                    peakDb = segment.peakDb,
-                    avgDb = segment.avgDb,
-                    confidence = confidence,
-                    clipStartMs = clipStartMs,
-                    pcm = clip.copyOf(clipSize),
-                    rhythmScore = segment.rhythm.score,
-                    classifierScore = if (classifier == null) null else scoreMax,
-                ),
+            val verdict = EpisodeJudge.judge(
+                hasClassifier = classifier != null,
+                snoring = if (scoreCount == 0) 0f else scoreMax,
+                awake = awakeMax,
+                rhythm = segment.rhythm.score,
             )
+            if (verdict.keep) {
+                onEvent(
+                    DetectedEvent(
+                        startMs = segment.startMs,
+                        durationMs = segment.durationMs,
+                        peakDb = segment.peakDb,
+                        avgDb = segment.avgDb,
+                        confidence = verdict.confidence,
+                        clipStartMs = clipStartMs,
+                        pcm = clip.copyOf(clipSize),
+                        rhythmScore = segment.rhythm.score,
+                        classifierScore = if (classifier == null) null else scoreMax,
+                    ),
+                )
+            } else {
+                droppedEpisodes++
+                lastDropReason = verdict.reason
+            }
         }
         clip = ShortArray(0)
         clipSize = 0

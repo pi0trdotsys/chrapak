@@ -2,6 +2,7 @@ package app.chrapak.schedule
 
 import java.time.LocalDateTime
 import java.time.ZoneId
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,7 +30,6 @@ class PrepReminderTest {
         reminderShownAtMs = reminderShownAtMs,
         nowMs = nowMs,
         skipUntilMs = skipUntilMs,
-        zone = zone,
     )
 
     @Test
@@ -50,11 +50,11 @@ class PrepReminderTest {
     }
 
     @Test
-    fun `the reminder waits until the evening, in local time`() {
-        assertFalse(decide(nowMs = at(19, 59)).shouldNotify)
-        assertTrue(decide(nowMs = at(20, 0)).shouldNotify)
-        // 21:00 local is 19:00 UTC; a UTC-based hour check would wrongly refuse this one.
-        assertTrue(decide(nowMs = at(21, 0)).shouldNotify)
+    fun `the reminder comes half an hour before the window, whatever the window`() {
+        assertEquals(22 * 60 + 30, AutoListenScheduler.prepMinute(23 * 60))
+        // A daytime window (12:00-08:00) gets its reminder before noon, not at a fixed evening hour.
+        assertEquals(11 * 60 + 30, AutoListenScheduler.prepMinute(12 * 60))
+        assertEquals(23 * 60 + 40, AutoListenScheduler.prepMinute(10))
     }
 
     @Test

@@ -43,6 +43,7 @@ import app.chrapak.detection.DetectionPipeline
 import app.chrapak.detection.DetectionPrefs
 import app.chrapak.detection.RoomCalibrator
 import app.chrapak.detection.SnoreClassifier
+import app.chrapak.detection.UncertainBudget
 import app.chrapak.detection.YamnetClassifier
 import app.chrapak.detection.configFor
 import app.chrapak.schedule.AutoListenNotifier
@@ -54,6 +55,7 @@ import app.chrapak.schedule.NapVerdict
 import app.chrapak.schedule.NapStage
 import app.chrapak.schedule.NapSensors
 import app.chrapak.report.NightReport
+import app.chrapak.report.NightStats
 import app.chrapak.schedule.ScheduleMath
 import app.chrapak.schedule.SummaryNotifier
 import app.chrapak.ui.MainActivity
@@ -427,7 +429,15 @@ class ListeningService : Service() {
     private suspend fun postSummary(db: ChrapakDatabase, night: NightEntity) {
         val saved = db.nights().all().firstOrNull { it.id == night.id } ?: return
         val stats = NightReport.stats(saved, db.events().forNight(saved.id))
-        SummaryNotifier.post(applicationContext, saved, stats, nap = night.isNap())
+        // The night before, of the same kind (a nap is not compared with a night), and long enough to have a score.
+        var previous: NightStats? = null
+        for (candidate in db.nights().all()) { // newest first
+            if (candidate.id == saved.id || candidate.sleepEndMs == null || candidate.sleepStartMs >= saved.sleepStartMs) continue
+            if (candidate.isNap() != saved.isNap()) continue
+            val s = NightReport.stats(candidate, db.events().forNight(candidate.id))
+            if (!s.tooShort) { previous = s; break }
+        }
+        SummaryNotifier.post(applicationContext, saved, stats, nap = night.isNap(), previous = previous)
     }
 
     @SuppressLint("MissingPermission") // checked in startListening()
@@ -445,10 +455,22 @@ class ListeningService : Service() {
         db.nights().insert(night)
 
         val events = Channel<DetectedEvent>(Channel.UNLIMITED)
+        val uncertain = UncertainBudget()
         val writer = launch(Dispatchers.IO) {
             for (event in events) {
                 val id = UUID.randomUUID().toString()
                 val file = File(filesDir, "clips/$nightId/$id.wav")
+                if (event.confidence < DetectionConfig.MIN_CONFIDENCE) {
+                    // Only the most likely uncertain clips of a night are kept for review.
+                    when (val drop = uncertain.offer(id, event.confidence)) {
+                        null -> Unit
+                        id -> continue
+                        else -> db.events().forNight(nightId).firstOrNull { it.id == drop }?.let { old ->
+                            old.clipPath?.let { File(filesDir, it).delete() }
+                            db.events().delete(old.id)
+                        }
+                    }
+                }
                 WavWriter.write(file, event.pcm, sampleRate)
                 db.events().insert(
                     SnoreEventEntity(
@@ -537,6 +559,7 @@ class ListeningService : Service() {
             classifier?.close()
             withContext(NonCancellable) {
                 pipeline.finish()
+                Log.i(TAG, "episodes ruled out by the model: ${pipeline.droppedEpisodes}")
                 events.close()
                 writer.join()
                 finishNight(db.nights(), db.events(), night, System.currentTimeMillis())

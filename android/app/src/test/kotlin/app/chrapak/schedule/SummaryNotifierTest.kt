@@ -27,16 +27,16 @@ class SummaryNotifierTest {
 
     @Test
     fun `the summary uses Polish plurals for episodes`() {
-        assertTrue(SummaryNotifier.text(stats(count = 1)).contains("1 epizod "))
-        assertTrue(SummaryNotifier.text(stats(count = 3)).contains("3 epizody "))
-        assertTrue(SummaryNotifier.text(stats(count = 5)).contains("5 epizodów "))
+        assertTrue(SummaryNotifier.text(stats(count = 1)).contains(Regex("\\b1 epizod\\b")))
+        assertTrue(SummaryNotifier.text(stats(count = 3)).contains(Regex("\\b3 epizody\\b")))
+        assertTrue(SummaryNotifier.text(stats(count = 5)).contains(Regex("\\b5 epizodów")))
     }
 
     @Test
     fun `suspect recordings are mentioned only when there are some`() {
         assertFalse(SummaryNotifier.text(stats(count = 2)).contains("do sprawdzenia"))
         val withSuspect = SummaryNotifier.text(stats(count = 2, suspect = 3))
-        assertTrue(withSuspect, withSuspect.contains("3 do sprawdzenia"))
+        assertTrue(withSuspect, withSuspect.contains("3 nagrania do sprawdzenia"))
     }
 
     @Test
@@ -45,5 +45,24 @@ class SummaryNotifierTest {
         assertFalse(SummaryNotifier.shouldPost(night, stats(count = 0, nightMs = 10 * 60_000)))
         assertTrue(SummaryNotifier.shouldPost(night, stats(count = 0, nightMs = 40 * 60_000)))
         assertTrue(SummaryNotifier.shouldPost(night, stats(count = 1, nightMs = 10 * 60_000)))
+    }
+
+    @Test
+    fun `the summary compares with the night before only when both have a score`() {
+        val now = stats(count = 3).copy(score = 20)
+        assertTrue(SummaryNotifier.text(now, stats(count = 5).copy(score = 45)).contains("Lepiej niż poprzednio (45/100)"))
+        assertTrue(SummaryNotifier.text(now, stats(count = 5).copy(score = 5)).contains("Gorzej niż poprzednio (5/100)"))
+        assertTrue(SummaryNotifier.text(now, stats(count = 5).copy(score = 25)).contains("Podobnie"))
+        assertFalse(SummaryNotifier.text(now, stats(count = 5, tooShort = true)).contains("poprzednio"))
+        assertFalse(SummaryNotifier.text(now, null).contains("poprzednio"))
+    }
+
+    @Test
+    fun `the title carries the score, a nap says so`() {
+        val night = NightEntity("n", 0, 60 * 60_000)
+        assertTrue(SummaryNotifier.title(night, stats(count = 2), nap = false, endMs = 60 * 60_000).endsWith("· 17/100"))
+        assertTrue(SummaryNotifier.title(night, stats(count = 2, tooShort = true), nap = true, endMs = 60 * 60_000).startsWith("Drzemka"))
+        assertFalse(SummaryNotifier.title(night, stats(count = 0), nap = false, endMs = 60 * 60_000).contains("/100"))
+        assertTrue(SummaryNotifier.text(stats(count = 2), nap = true).contains("% drzemki"))
     }
 }

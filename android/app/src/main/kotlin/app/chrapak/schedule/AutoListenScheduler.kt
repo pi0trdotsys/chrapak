@@ -25,8 +25,8 @@ object AutoListenScheduler {
 
     /** Minute of day for the Sunday weekly digest: 10:00 local. */
     const val DIGEST_MIN = 10 * 60
-    /** Minute of day for the evening "phone on the charger?" reminder: 22:30 local. */
-    const val PREP_MIN = 22 * 60 + 30
+    /** The evening "phone on the charger?" reminder comes this long before the window starts. */
+    const val PREP_LEAD_MIN = 30
     /** java.time.DayOfWeek.SUNDAY == 7. Not Calendar.SUNDAY, which is 1 (and means Monday there). */
     const val DIGEST_DAY_OF_WEEK = 7
 
@@ -65,11 +65,14 @@ object AutoListenScheduler {
         set(context, at, ACTION_DIGEST, REQ_DIGEST)
     }
 
+    /** Minute of day for the reminder: [PREP_LEAD_MIN] before the window starts, wrapping past midnight. */
+    fun prepMinute(windowStartMin: Int): Int = Math.floorMod(windowStartMin - PREP_LEAD_MIN, 24 * 60)
+
     /** Evening reminder. Only when there is a window it could be reminding about. */
     fun schedulePrep(context: Context) {
         if (NotificationPrefs.prepOff(context)) return
         if (!AutoListenPrefs.armed(context) || !AutoListenPrefs.scheduleOn(context)) return
-        val at = ScheduleMath.nextOccurrenceMs(System.currentTimeMillis(), PREP_MIN, ZoneId.systemDefault())
+        val at = ScheduleMath.nextOccurrenceMs(System.currentTimeMillis(), prepMinute(AutoListenPrefs.startMin(context)), ZoneId.systemDefault())
         Log.i(TAG, "prep: ${java.util.Date(at)}")
         set(context, at, ACTION_PREP, REQ_PREP)
     }

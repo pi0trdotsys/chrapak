@@ -30,24 +30,24 @@ object PrepReminderRule {
         hasNightTonight: Boolean,
         reminderShownAtMs: Long?,
         nowMs: Long,
-        /** When the evening reminder can be sent at the earliest, in local time. */
-        earliestHourOfDay: Int = 20,
         /** The user tapped "nie dziś": do not show anything until this moment. */
         skipUntilMs: Long = 0L,
-        zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
     ): PrepDecision {
         if (!armed || !scheduleOn) return PrepDecision(false, "czuwanie wyłączone")
         if (listening) return PrepDecision(false, "już słucha")
         if (hasNightTonight) return PrepDecision(false, "noc już w toku")
         if (charging) return PrepDecision(false, "telefon na ładowarce")
         if (skipUntilMs > nowMs) return PrepDecision(false, "użytkownik wybrał „nie dziś”")
-        val hour = java.time.Instant.ofEpochMilli(nowMs).atZone(zone).hour
-        if (hour < earliestHourOfDay) return PrepDecision(false, "za wcześnie (przed $earliestHourOfDay:00)")
         // Do not show twice the same evening; the receiver re-arms the alarm after firing.
         if (reminderShownAtMs != null && nowMs - reminderShownAtMs < 6 * 3_600_000L) return PrepDecision(false, "już pokazano")
         return PrepDecision(true, "telefon nie jest na ładowarce, noc się zaraz zacznie")
     }
 }
+
+/** Whether the phone is plugged in right now, from the sticky battery broadcast (no receiver is registered). */
+fun isCharging(context: Context): Boolean =
+    (context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        ?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
 
 /** Posts the "phone on the charger?" reminder, with quick "yes / not tonight" actions. */
 object PrepReminderNotifier {
@@ -60,6 +60,7 @@ object PrepReminderNotifier {
     fun post(context: Context) {
         if (NotificationPrefs.prepOff(context)) return
         PrepReminderPrefs.rememberShown(context, System.currentTimeMillis())
+        val startLabel = AutoListenPrefs.startMin(context).let { "%02d:%02d".format(it / 60, it % 60) }
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Przygotowanie do snu", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(
@@ -86,7 +87,7 @@ object PrepReminderNotifier {
             NOTIFICATION_ID,
             Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_chrapak)
-                .setContentTitle(context.getString(R.string.notification_prep_title))
+                .setContentTitle(context.getString(R.string.notification_prep_title, startLabel))
                 .setContentText(context.getString(R.string.notification_prep_text))
                 .setContentIntent(open)
                 .setAutoCancel(true)

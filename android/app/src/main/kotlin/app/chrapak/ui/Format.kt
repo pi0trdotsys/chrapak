@@ -27,6 +27,7 @@ fun durationLabel(ms: Long): String {
     val s = totalSeconds % 60
     return when {
         h > 0 -> "$h h $m min"
+        m > 0 && s == 0 -> "$m min"
         m > 0 -> "$m min $s s"
         else -> "$s s"
     }
