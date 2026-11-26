@@ -31,6 +31,14 @@ Każdy build (release i debug) podpisuje jeden klucz Chrapaka. Android nie zains
   ```sh
   ./scripts/build-release.sh   # dist/chrapak-<wersja>.apk
   ```
+- **Release z GitHuba.** Workflow [`android-release.yml`](../.github/workflows/android-release.yml) na każdy tag `v*` pobiera model, uruchamia testy, buduje APK tym samym kluczem (z sekretów repozytorium), sprawdza odcisk i dołącza plik do release'u. Potrzebuje dwóch sekretów, które ustawiasz sam z komputera, na którym jest klucz:
+
+  ```sh
+  base64 -i ~/.chrapak-signing/chrapak-release.jks | gh secret set CHRAPAK_KEYSTORE_BASE64
+  sed -n 's/^storePassword=//p' ~/.chrapak-signing/keystore.properties | gh secret set CHRAPAK_KEYSTORE_PASSWORD
+  ```
+
+  Sekrety nie trafiają do forków ani do pull requestów z zewnątrz, a klucz jest kasowany z maszyny po buildzie.
 
 ## Jak działa detekcja
 

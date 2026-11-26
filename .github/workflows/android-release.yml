@@ -1,0 +1,82 @@
+# Builds the Android app on every v* tag, signs it with the Chrapak key from the repository secrets,
+# checks the signature and the model (scripts/build-release.sh), and attaches the APK to the release.
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   CHRAPAK_KEYSTORE_BASE64   the keystore file, base64
+#   CHRAPAK_KEYSTORE_PASSWORD its password (store and key use the same one)
+name: Android release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Fetch the YAMNet model
+        run: ./scripts/fetch-yamnet.sh
+
+      - name: Unit tests
+        run: ./gradlew -q :app:testDebugUnitTest
+
+      - name: Restore the signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CHRAPAK_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.CHRAPAK_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Missing CHRAPAK_KEYSTORE_BASE64 or CHRAPAK_KEYSTORE_PASSWORD secret"
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/chrapak-signing"
+          mkdir -p "$dir"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$dir/chrapak-release.jks"
+          {
+            echo "storeFile=$dir/chrapak-release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=chrapak"
+            echo "keyPassword=$KEYSTORE_PASSWORD"
+          } > "$dir/keystore.properties"
+          echo "CHRAPAK_SIGNING=$dir/keystore.properties" >> "$GITHUB_ENV"
+
+      - name: Build and verify the release APK
+        run: ./scripts/build-release.sh
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.apk --clobber
+          else
+            gh release create "$TAG" dist/*.apk --title "Chrapak ${TAG#v}" --generate-notes
+          fi
+
+      - name: Keep the APK as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrapak-apk
+          path: android/dist/*.apk
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/chrapak-signing"
