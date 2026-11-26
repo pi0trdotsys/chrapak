@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -16,14 +18,31 @@ android {
         versionName = "1.8.0"
     }
 
+    // One key for every build, on every machine. Android refuses an update signed with a different
+    // key, and each machine's own debug key made every switch between computers cost a reinstall and
+    // the user's recordings. The key lives outside the repository; see android/README.md, "Podpis".
+    val chrapakKey = chrapakSigningProperties()?.let { props ->
+        signingConfigs.create("chrapak") {
+            storeFile = file(props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = chrapakKey
         }
-        // Release-like build signed with the debug key, only for measuring CPU and battery on a phone.
+        debug {
+            // With the key at hand, debug builds can be installed over releases and the other way round.
+            if (chrapakKey != null) signingConfig = chrapakKey
+        }
+        // Release-like build for measuring CPU and battery on a phone; signed like debug.
         create("benchmark") {
             initWith(getByName("release"))
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = chrapakKey ?: signingConfigs.getByName("debug")
             matchingFallbacks += "release"
             isDebuggable = false
         }
@@ -74,6 +93,27 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.con
     doFirst {
         check(yamnetModel.asFile.isFile) {
             "Missing ${yamnetModel.asFile}. Run android/scripts/fetch-yamnet.sh first."
+        }
+    }
+}
+
+/**
+ * The release key's settings: the file named by CHRAPAK_SIGNING (a path), or else
+ * ~/.chrapak-signing/keystore.properties. Null when neither exists.
+ */
+fun chrapakSigningProperties(): Properties? {
+    val path = System.getenv("CHRAPAK_SIGNING") ?: "${System.getProperty("user.home")}/.chrapak-signing/keystore.properties"
+    val file = File(path)
+    if (!file.isFile) return null
+    return Properties().apply { file.inputStream().use { load(it) } }
+}
+
+// A release APK signed with anything but the Chrapak key would not install over the existing app,
+// so without the key the release build stops instead of quietly signing with something else.
+tasks.matching { it.name == "packageRelease" }.configureEach {
+    doFirst {
+        check(chrapakSigningProperties() != null) {
+            "No release key. Put keystore.properties in ~/.chrapak-signing/ or point CHRAPAK_SIGNING at it (android/README.md, \"Podpis\")."
         }
     }
 }

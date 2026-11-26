@@ -11,6 +11,27 @@ Potrzebujesz JDK 17+ i Android SDK (platforma 37). Utwórz `local.properties` z 
 ./gradlew :app:assembleDebug       # app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Podpis
+
+Każdy build (release i debug) podpisuje jeden klucz Chrapaka. Android nie zainstaluje aktualizacji podpisanej innym kluczem, a każdy komputer ma własny klucz debug, więc wcześniej każda zmiana komputera oznaczała odinstalowanie aplikacji i utratę nagrań (tak było z 1.5.0 i 1.7.0).
+
+- Klucz **nie jest w repozytorium**. Gradle szuka pliku `~/.chrapak-signing/keystore.properties` (albo ścieżki ze zmiennej `CHRAPAK_SIGNING`):
+
+  ```properties
+  storeFile=/ścieżka/do/chrapak-release.jks
+  storePassword=…
+  keyAlias=chrapak
+  keyPassword=…
+  ```
+
+- Na nowym komputerze skopiuj folder `~/.chrapak-signing/` z istniejącego (bezpiecznym kanałem, nie przez git ani czat). **Zrób jego kopię zapasową**, np. w menedżerze haseł: bez niego nie da się wydać aktualizacji, która zainstaluje się na istniejącej aplikacji.
+- Bez klucza wersja debug podpisuje się kluczem debug komputera, a `assembleRelease` kończy się błędem, zamiast po cichu podpisać APK czymś innym.
+- Release buduj skryptem, który sprawdza odcisk certyfikatu z [`signing/release-cert.sha256`](signing/release-cert.sha256) i obecność modelu:
+
+  ```sh
+  ./scripts/build-release.sh   # dist/chrapak-<wersja>.apk
+  ```
+
 ## Jak działa detekcja
 
 Priorytetem jest mało energii, bo telefon pracuje całą noc.
