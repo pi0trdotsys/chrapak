@@ -42,6 +42,7 @@ import app.chrapak.detection.DetectionConfig
 import app.chrapak.detection.DetectionPipeline
 import app.chrapak.detection.DetectionPrefs
 import app.chrapak.detection.RoomCalibrator
+import app.chrapak.detection.PhoneUse
 import app.chrapak.detection.SnoreClassifier
 import app.chrapak.detection.UncertainBudget
 import app.chrapak.detection.YamnetClassifier
@@ -507,6 +508,9 @@ class ListeningService : Service() {
             val chunk = ShortArray(sampleRate * READ_CHUNK_MS / 1000) // one read per chunk: fewer wake-ups, lower CPU
             var lastUiUpdate = 0L
             var readErrors = 0
+            val power = getSystemService(PowerManager::class.java)
+            val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+            val phoneUse = PhoneUse()
             while (!stopRequested && isActive && !pastAutoStop() && !windowEnded()) {
                 val mic = record ?: run {
                     val (fresh, source) = createAudioRecord(sampleRate)
@@ -529,6 +533,7 @@ class ListeningService : Service() {
                 }
                 if (read == 0) continue // blocking read; zero only on a spurious wake-up
                 readErrors = 0
+                pipeline.phoneInUse = phoneUse.update(System.currentTimeMillis(), power.isInteractive, keyguard.isKeyguardLocked)
                 pipeline.feed(chunk, read)
                 if (startedByNap) probeNap(pipeline, classifier)
                 if (debuggable) {

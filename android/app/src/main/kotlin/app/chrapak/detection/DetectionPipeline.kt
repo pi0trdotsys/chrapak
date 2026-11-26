@@ -109,6 +109,14 @@ class DetectionPipeline(
     private var lastClassifyMs = 0L
     private var scoreMax = 0f
 
+    /**
+     * Set by the caller before each [feed]: someone is using this phone (screen on and unlocked).
+     * Sounds then come from the phone itself or from a person who is awake, e.g. scrolling videos,
+     * so an episode that overlaps such a moment is dropped and the model is not even run.
+     */
+    var phoneInUse: Boolean = false
+    private var episodeTouchedUse = false
+
     /** Episodes the gate caught but the model ruled out; nothing of them is saved. For diagnostics. */
     var droppedEpisodes = 0
         private set
@@ -179,7 +187,8 @@ class DetectionPipeline(
         if (!wasOpen && segmenter.isOpen) openClip(frameStartMs + frameMs)
         else if (wasOpen) appendToClip()
 
-        if (result.active && segmenter.isOpen) classifyIfDue(frameStartMs)
+        if (segmenter.isOpen && phoneInUse) episodeTouchedUse = true
+        if (result.active && segmenter.isOpen && !phoneInUse) classifyIfDue(frameStartMs)
         if (wasOpen && !segmenter.isOpen) close(segment)
     }
 
@@ -192,6 +201,7 @@ class DetectionPipeline(
         scoreMax = 0f
         awakeMax = 0f
         scoreCount = 0
+        episodeTouchedUse = phoneInUse
     }
 
     private fun appendToClip() {
@@ -215,7 +225,7 @@ class DetectionPipeline(
 
     private fun close(segment: SnoreSegment?) {
         if (segment != null) {
-            val verdict = EpisodeJudge.judge(
+            val verdict = if (episodeTouchedUse) EpisodeVerdict(false, scoreMax, "telefon w użyciu") else EpisodeJudge.judge(
                 hasClassifier = classifier != null,
                 snoring = if (scoreCount == 0) 0f else scoreMax,
                 awake = awakeMax,

@@ -41,6 +41,19 @@ class DetectionPipelineTest {
     }
 
     @Test
+    fun `snoring heard while the phone is in use is dropped and the model is not run`() {
+        val events = mutableListOf<DetectedEvent>()
+        val pipeline = DetectionPipeline(DetectionConfig(), classifier(0.9f), startEpochMs = 1_000_000L) { events += it }
+        pipeline.phoneInUse = true
+        val signal = night()
+        pipeline.feed(signal)
+        pipeline.finish()
+        assertEquals(0, events.size)
+        assertEquals(0, pipeline.classifierCalls)
+        assertEquals("telefon w użyciu", pipeline.lastDropReason)
+    }
+
+    @Test
     fun `an episode the model hears no snoring in is dropped, audio and all`() {
         val (events, pipeline) = run(classifier(0.02f))
         assertEquals(0, events.size)
