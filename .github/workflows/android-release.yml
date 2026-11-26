@@ -26,9 +26,10 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21" # what the project is built with locally (Gradle 9, AGP 9)
 
-      - uses: android-actions/setup-android@v3
+      # The runner image ships the Android SDK with licences accepted (ANDROID_HOME); Gradle fetches
+      # the platform and build tools it is missing. A setup-android step only fought over sdkmanager versions.
 
       - name: Fetch the YAMNet model
         run: ./scripts/fetch-yamnet.sh
